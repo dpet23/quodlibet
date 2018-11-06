@@ -24,7 +24,7 @@ from shutil import copyfile
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ID = "synchronize_to_device"
-    PLUGIN_NAME = _("SynchronizeToDevice")
+    PLUGIN_NAME = _("Synchronize to Device")
     PLUGIN_DESC = _(
         "Synchronizes all songs from the selected saved searches with the "
         "specified folder. All songs in that folder, which are not in the "
@@ -158,7 +158,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 vbox.pack_start(destination_path_box, True, True, 0)
                 vbox.pack_start(start_button, True, True, 0)
                 vbox.pack_start(stop_button, True, True, 0)
-                vbox.pack_start(Gtk.Label(label=_("Output:")), True, True, 0)
+                vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
                 vbox.pack_start(scroll, True, True, 0)
                 return qltk.Frame(
                     _("The following saved searches shall be synchronized:"),

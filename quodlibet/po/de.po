@@ -2254,6 +2254,32 @@ msgstr "Fehler beim Finden des Squeezebox-Servers"
 msgid "Error finding %s. Please check settings"
 msgstr "Fehler beim Finden von %s. Bitte überprüfen Sie die Einstellungen"
 
+#: quodlibet/ext/events/synchronize_to_device.py:27
+msgid "Synchronize to Device"
+msgstr "Mit Gerät synchronisieren"
+
+#: quodlibet/ext/events/synchronize_to_device.py:29
+msgid ""
+"Synchronizes all songs from the selected saved searches with the "
+"specified folder. All songs in that folder, which are not in the "
+"saved searches, will be deleted."
+msgstr ""
+"Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in "
+"den angegebenen Ordner. Alle Lieder / Dateien in diesem Ordner, "
+"die nicht in den gespeicherten Suchen sind, werden gelöscht."
+
+#: quodlibet/ext/events/synchronize_to_device.py:148
+msgid "Destination path:"
+msgstr "Ziel Pfad:"
+
+#: quodlibet/ext/events/synchronize_to_device.py:152
+msgid "Start synchronization"
+msgstr "Starte Synchronisation"
+
+#: quodlibet/ext/events/synchronize_to_device.py:155
+msgid "Stop synchronization"
+msgstr "Stoppe Synchronisation"
+
 #: quodlibet/ext/events/synchronizedlyrics.py:35
 msgid "Synchronized Lyrics"
 msgstr "Synchronisierte Liedtexte"
