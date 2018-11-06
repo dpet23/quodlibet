@@ -158,7 +158,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 vbox.pack_start(destination_path_box, True, True, 0)
                 vbox.pack_start(start_button, True, True, 0)
                 vbox.pack_start(stop_button, True, True, 0)
-                vbox.pack_start(Gtk.Label(label=_("Output:")), True, True, 0)
+                vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
                 vbox.pack_start(scroll, True, True, 0)
                 return qltk.Frame(
                     _("The following saved searches shall be synchronized:"),
