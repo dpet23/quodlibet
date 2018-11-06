@@ -2264,11 +2264,7 @@ msgstr "Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in "
 
 #: ../quodlibet/ext/events/synchronize_to_device.py:148
 msgid "Destination path:"
-msgstr "Ziel Pfad"
-
-#: ../quodlibet/ext/events/synchronize_to_device.py:148
-msgid "Destination path:"
-msgstr "Ziel Pfad"
+msgstr "Ziel Pfad:"
 
 #: ../quodlibet/ext/events/synchronize_to_device.py:152
 msgid "Start synchronization"
