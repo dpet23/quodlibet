@@ -117,6 +117,7 @@ plugin from loading.
 **libappindicator-gtk3** + **typelibs**:
     * For the Tray Icon plugin under Ubuntu Unity and KDE Plasma
 
+
 Build Dependencies
 ------------------
 
