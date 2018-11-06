@@ -2264,7 +2264,7 @@ msgid ""
 "specified folder. All songs in that folder, which are not in the "
 "saved searches, will be deleted."
 msgstr ""
-Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in "
+"Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in "
 "den angegebenen Ordner. Alle Lieder / Dateien in diesem Ordner, "
 "die nicht in den gespeicherten Suchen sind, werden gelöscht."
 
