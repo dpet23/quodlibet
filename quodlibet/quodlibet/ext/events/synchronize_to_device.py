@@ -16,7 +16,7 @@ from shutil import copyfile
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ID = "synchronize_to_device"
-    PLUGIN_NAME = _("Synchronize to device")
+    PLUGIN_NAME = _("SynchronizeToDevice")
     PLUGIN_DESC = _(
         "Synchronizes all songs from the selected saved searches with the "
         "specified folder. All songs in that folder, which are not in the "
