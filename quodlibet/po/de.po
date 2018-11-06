@@ -2259,12 +2259,14 @@ msgid "Synchronize To Device"
 msgstr "Mit Gerät synchronisieren"
 
 #: quodlibet/ext/events/synchronize_to_device.py:29
-msgid "Synchronizes all songs from the selected saved searches with the "
-        "specified folder. All songs in that folder, which are not in the "
-        "saved searches, will be deleted."
-msgstr "Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in "
-        "den angegebenen Ordner. Alle Lieder / Dateien in diesem Ordner, "
-        "die nicht in den gespeicherten Suchen sind, werden gelöscht."
+msgid ""
+"Synchronizes all songs from the selected saved searches with the "
+"specified folder. All songs in that folder, which are not in the "
+"saved searches, will be deleted."
+msgstr ""
+Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in "
+"den angegebenen Ordner. Alle Lieder / Dateien in diesem Ordner, "
+"die nicht in den gespeicherten Suchen sind, werden gelöscht."
 
 #: quodlibet/ext/events/synchronize_to_device.py:148
 msgid "Destination path:"
