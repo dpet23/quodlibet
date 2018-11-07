@@ -2255,7 +2255,7 @@ msgid "Error finding %s. Please check settings"
 msgstr "Fehler beim Finden von %s. Bitte überprüfen Sie die Einstellungen"
 
 #: quodlibet/ext/events/synchronize_to_device.py:27
-msgid "Synchronize To Device"
+msgid "Synchronize to Device"
 msgstr "Mit Gerät synchronisieren"
 
 #: quodlibet/ext/events/synchronize_to_device.py:29
