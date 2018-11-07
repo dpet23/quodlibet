@@ -2280,18 +2280,6 @@ msgstr "Starte Synchronisation"
 msgid "Stop synchronization"
 msgstr "Stoppe Synchronisation"
 
-#: quodlibet/ext/events/synchronizedlyrics.py:161
-msgid "Progress"
-msgstr "Fortschritt"
-
-#: quodlibet/ext/events/synchronizedlyrics.py:164
-msgid "The following saved searches shall be synchronized:"
-msgstr "Die folgenden gespeicherten Suchen sollen synchronisiert werden:"
-
-#: ../quodlibet/ext/events/synchronizedlyrics.py:168
-msgid "No saved searches yet, create some and come back!"
-msgstr "Es gibt noch keine gespeicherten Suchen, erstelle erst eine!"
-
 #: quodlibet/ext/events/synchronizedlyrics.py:35
 msgid "Synchronized Lyrics"
 msgstr "Synchronisierte Liedtexte"
