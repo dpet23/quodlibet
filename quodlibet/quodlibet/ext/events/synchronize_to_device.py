@@ -126,7 +126,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                             # in the saved searches anymore
                             for existing_file in \
                                     os.listdir(destination_path):
-                                if existing_file not in filename_list:
+                                if existing_file not in filename_list and not\
+                                        existing_file.startswith("."):
                                     append(
                                         "Deleted '{}'.".format(existing_file))
                                     os.remove(
