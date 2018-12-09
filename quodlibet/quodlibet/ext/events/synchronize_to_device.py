@@ -37,10 +37,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         query_path = os.path.join(get_user_dir(), 'lists', 'queries.saved')
         try:
             with open(query_path, 'r', encoding="utf-8") as query_file:
+                if not query_file.read(1):
+                    raise FileNotFoundError
                 log = Gtk.TextView()
                 log.set_left_margin(5)
                 log.set_right_margin(5)
-                log.editable = False
+                log.props.editable = False
                 buffer = log.get_buffer()
                 scroll = Gtk.ScrolledWindow()
                 scroll.set_size_request(-1, 100)
@@ -79,56 +81,67 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                     filename_list = []
                     destination_path = config.get('plugins', self.c_path)
-                    try:
-                        for song in selected_songs:
-                            if not self.running:
-                                append("Stopped the synchronization.")
-                                return
+                    if destination_path == '':
+                        append(_("Destination path is empty, please provide "
+                                 "it!"))
+                    else:
+                        try:
+                            append("Starting...")
+                            for song in selected_songs:
+                                if not self.running:
+                                    append("Stopped the synchronization.")
+                                    return
 
-                            # prevent the application from becoming unreponsive
-                            while Gtk.events_pending():
-                                Gtk.main_iteration()
+                                # prevent the application from becoming
+                                # unreponsive
+                                while Gtk.events_pending():
+                                    Gtk.main_iteration()
 
-                            song_path = song['~filename']
-                            song_file_name = "{} - {} - {} - {}.mp3".format(
-                                song("genre"), song("artist"),
-                                song("album"), song("title"))
-                            valid_chars = "-_.() %s%s" % (
-                                string.ascii_letters, string.digits)
-                            song_file_name = "".join(
-                                char for char in song_file_name if
-                                char in valid_chars)
-                            filename_list.append(song_file_name)
-                            dest_file = destination_path + song_file_name
-                            # skip existing files
-                            if os.path.exists(dest_file):
-                                append(
-                                    "Skipped '{}' because it "
-                                    "already exists.".format(song_file_name))
-                            else:
-                                append(
-                                    "Writing '{}'...".format(dest_file))
-                                copyfile(song_path, dest_file)
+                                song_path = song['~filename']
+                                file_ext = song("~filename").split('.')[-1]
+                                song_file_name = "{} - {} - {} - {}.{}".format(
+                                    song("genre"), song("artist"),
+                                    song("album"), song("title"), file_ext)
+                                # workaround file naming limitations on fat32
+                                # formated drives
+                                valid_chars = "-_.() %s%s" % (
+                                    string.ascii_letters, string.digits)
+                                song_file_name = "".join(
+                                    char for char in song_file_name if
+                                    char in valid_chars)
+                                filename_list.append(song_file_name)
+                                dest_file = os.path.join(destination_path,
+                                                         song_file_name)
+                                # skip existing files
+                                if os.path.exists(dest_file):
+                                    append(
+                                        "Skipped '{}' because it already "
+                                        "exists.".format(song_file_name))
+                                else:
+                                    append(
+                                        "Writing '{}'...".format(dest_file))
+                                    copyfile(song_path, dest_file)
 
-                        # delete files which are not
-                        # in the saved searches anymore
-                        for existing_file_name in os.listdir(destination_path):
-                            if existing_file_name not in filename_list:
-                                append(
-                                    "Deleted '{}'.".format(existing_file_name))
-                                os.remove(
-                                    destination_path + existing_file_name)
+                            # delete files which are not
+                            # in the saved searches anymore
+                            for existing_file in \
+                                    os.listdir(destination_path):
+                                if existing_file not in filename_list and not\
+                                        existing_file.startswith("."):
+                                    append(
+                                        "Deleted '{}'.".format(existing_file))
+                                    os.remove(
+                                        destination_path + existing_file)
 
-                        append("Synchronization finished.")
-                    except FileNotFoundError as e:
-                        append(str(e))
+                            append("Synchronization finished.")
+                        except FileNotFoundError as e:
+                            append(str(e))
 
-                def start(_):
-                    append("Starting...")
+                def start(button):
                     self.running = True
                     synchronize()
 
-                def stop(_):
+                def stop(button):
                     append("Stopping...")
                     self.running = False
 
@@ -145,7 +158,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 destination_path.set_text(self.pattern)
                 destination_path.connect('changed', path_changed)
                 destination_path_box.pack_start(
-                    Gtk.Label(label=_("Destination path:")), True, True, 0)
+                    Gtk.Label(label=_("Destination path:")), False, False, 0)
                 destination_path_box.pack_start(destination_path, True, True,
                                                 0)
 
