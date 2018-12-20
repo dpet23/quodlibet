@@ -18,13 +18,11 @@ from quodlibet.browsers.paned.util import get_headers
 from quodlibet.browsers.paned.models import AllEntry, UnknownEntry, SongsEntry
 from quodlibet.browsers.paned.models import PaneModel
 from quodlibet.browsers.paned.prefs import PatternEditor, Preferences
-from quodlibet.browsers.paned.prefs import PreferencesButton
+from quodlibet.browsers.paned.prefs import PreferencesButton, ColumnMode
 from quodlibet.browsers.paned.pane import Pane
 from quodlibet.formats import AudioFile
 from quodlibet.util.collection import Collection
 from quodlibet.library import SongLibrary, SongLibrarian
-from quodlibet.const import COLUMN_MODE_SMALL, COLUMN_MODE_WIDE, \
-    COLUMN_MODE_COLUMNAR
 
 SONGS = [
     AudioFile({
@@ -92,7 +90,7 @@ class TPanedBrowser(TestCase):
         self.failUnless(self.bar.can_filter_text())
 
     def test_filter_text(self):
-        self.bar.finalize(False)
+        self.bar.activate()
 
         self.bar.filter_text("artist=nope")
         self._wait()
@@ -103,14 +101,14 @@ class TPanedBrowser(TestCase):
         self.failUnlessEqual(set(self.last), set(SONGS[1:]))
 
     def test_filter_value(self):
-        self.bar.finalize(False)
+        self.bar.activate()
         expected = [SONGS[0]]
         self.bar.filter("artist", ["boris"])
         self._wait()
         self.failUnlessEqual(self.last, expected)
 
     def test_filter_notvalue(self):
-        self.bar.finalize(False)
+        self.bar.activate()
         expected = SONGS[1:4]
         self.bar.filter("artist", ["notvalue", "mu", "piman"])
         self._wait()
@@ -139,7 +137,7 @@ class TPanedBrowser(TestCase):
         self.failUnlessEqual(self.emit_count, 1)
 
     def test_restore_selection(self):
-        self.bar.finalize(False)
+        self.bar.activate()
         self.bar.filter("artist", [u"piman"])
         self.bar.save()
         self.bar.unfilter()
@@ -150,7 +148,7 @@ class TPanedBrowser(TestCase):
             self.assertTrue(u"piman" in song.list("artist"))
 
     def test_set_all_panes(self):
-        self.bar.finalize(False)
+        self.bar.activate()
         self.bar.set_all_panes()
 
     def test_restore_pane_width(self):
@@ -172,10 +170,10 @@ class TPanedBrowser(TestCase):
         self.failUnlessAlmostEqual(paneds[1].get_relative(), 1.0 / 3.0)
         self.failUnlessAlmostEqual(paneds[2].get_relative(), 1.0 / 2.0)
 
-    def test_wide_mode(self):
-        self.bar.set_all_column_mode(COLUMN_MODE_SMALL)
-        self.bar.set_all_column_mode(COLUMN_MODE_WIDE)
-        self.bar.set_all_column_mode(COLUMN_MODE_COLUMNAR)
+    def test_column_mode(self):
+        self.bar.set_all_column_mode(ColumnMode.SMALL)
+        self.bar.set_all_column_mode(ColumnMode.WIDE)
+        self.bar.set_all_column_mode(ColumnMode.COLUMNAR)
 
     def tearDown(self):
         self.bar.destroy()
