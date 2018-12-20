@@ -29,7 +29,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         "Synchronizes all songs from the selected saved searches with the "
         "specified folder. All songs in that folder, which are not in the "
         "saved searches, will be deleted.")
-    c_path = __name__ + '_path'
+    config_path_key = __name__ + '_path'
 
     def PluginPreferences(self, parent):
         vbox = Gtk.VBox(spacing=6)
@@ -49,11 +49,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 scroll.add(log)
 
                 def append(text):
-                    GLib.idle_add(lambda: buffer.insert(buffer.get_end_iter(),
-                                                        text + "\n"))
-                    GLib.idle_add(
-                        lambda: log.scroll_to_mark(buffer.get_insert(), 0.0,
-                                                   True, 0.5, 0.5))
+                    idle_add(buffer.insert(buffer.get_end_iter(),
+                                           text + "\n"))
+                    log.scroll_to_mark(buffer.get_insert(), 0.0, True,
+                                       0.5, 0.5))
 
                 queries = {}
                 for query_string in query_file:
@@ -80,8 +79,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                             selected_songs.append(song)
 
                     filename_list = []
-                    destination_path = config.get('plugins', self.c_path)
-                    if destination_path == '':
+                    destination = destination_entry.get_text()
+                    if destination == '':
                         append(_("Destination path is empty, please provide "
                                  "it!"))
                     else:
@@ -110,7 +109,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                     char for char in song_file_name if
                                     char in valid_chars)
                                 filename_list.append(song_file_name)
-                                dest_file = os.path.join(destination_path,
+                                dest_file = os.path.join(destination,
                                                          song_file_name)
                                 # skip existing files
                                 if os.path.exists(dest_file):
@@ -125,13 +124,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                             # delete files which are not
                             # in the saved searches anymore
                             for existing_file in \
-                                    os.listdir(destination_path):
+                                    os.listdir(destination):
                                 if existing_file not in filename_list and not\
                                         existing_file.startswith("."):
                                     append(
                                         "Deleted '{}'.".format(existing_file))
                                     os.remove(
-                                        destination_path + existing_file)
+                                        destination + existing_file)
 
                             append("Synchronization finished.")
                         except FileNotFoundError as e:
@@ -146,20 +145,20 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     self.running = False
 
                 def path_changed(entry):
-                    self.path = entry.get_text()
-                    config.set('plugins', self.c_path, self.path)
+                    config.set('plugins', self.config_path_key,
+                               entry.get_text())
 
-                self.pattern = config.get('plugins', self.c_path,
-                                          'the path of your device, e.g. '
-                                          '/run/media/my-username/device-id/'
-                                          'Music')
                 destination_path_box = Gtk.HBox(spacing=3)
-                destination_path = Gtk.Entry()
-                destination_path.set_text(self.pattern)
-                destination_path.connect('changed', path_changed)
+                destination_entry = Gtk.Entry()
+                destination_entry.set_tooltip_text("The absolute path of your"
+                                                   " device, e.g. '/run/media/"
+                                                   "my-user/device-id/Music'")
+                destination_entry.set_text(
+                    config.get('plugins', self.config_path_key, ''))
+                destination_entry.connect('changed', path_changed)
                 destination_path_box.pack_start(
                     Gtk.Label(label=_("Destination path:")), False, False, 0)
-                destination_path_box.pack_start(destination_path, True, True,
+                destination_path_box.pack_start(destination_entry, True, True,
                                                 0)
 
                 start_button = Gtk.Button(label=_("Start synchronization"))

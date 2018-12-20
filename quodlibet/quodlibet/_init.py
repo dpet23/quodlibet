@@ -215,12 +215,9 @@ def _init_gtk():
 
     import gi
 
-    # pygiaio 3.14rev16 switched to fontconfig for PangoCairo. As this results
-    # in 100% CPU under win7 revert it. Maybe we need to update the
-    # cache in the windows installer for it to work... but for now revert.
-    if is_windows():
-        environ['PANGOCAIRO_BACKEND'] = 'win32'
-        environ["GTK_CSD"] = "0"
+    if config.getboolean("settings", "pangocairo_force_fontconfig") and \
+            "PANGOCAIRO_BACKEND" not in environ:
+        environ["PANGOCAIRO_BACKEND"] = "fontconfig"
 
     # disable for consistency and trigger events seem a bit flaky here
     if config.getboolean("settings", "scrollbar_always_visible"):
@@ -238,6 +235,7 @@ def _init_gtk():
     gi.require_version("Gdk", "3.0")
     gi.require_version("Pango", "1.0")
     gi.require_version('Soup', '2.4')
+    gi.require_version('PangoCairo', "1.0")
 
     from gi.repository import Gtk
     from quodlibet.qltk import ThemeOverrider, gtk_version
