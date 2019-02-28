@@ -49,11 +49,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 scroll.add(log)
 
                 def append(text):
-                    GLib.idle_add(lambda: buffer.insert(buffer.get_end_iter(),
-                                                        text + "\n"))
-                    GLib.idle_add(
-                        lambda: log.scroll_to_mark(buffer.get_insert(), 0.0,
-                                                   True, 0.5, 0.5))
+                    idle_add(buffer.insert(buffer.get_end_iter(),
+                                           text + "\n"))
+                    log.scroll_to_mark(buffer.get_insert(), 0.0, True,
+                                       0.5, 0.5))
 
                 queries = {}
                 for query_string in query_file:
