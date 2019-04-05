@@ -8,6 +8,7 @@
 
 import os
 import string
+from pathlib import Path
 
 from gi.repository import Gtk, GLib
 from quodlibet import _, app
@@ -49,10 +50,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 scroll.add(log)
 
                 def append(text):
-                    idle_add(buffer.insert(buffer.get_end_iter(),
-                                           text + "\n"))
-                    log.scroll_to_mark(buffer.get_insert(), 0.0, True,
-                                       0.5, 0.5))
+                    GLib.idle_add(lambda: buffer.insert(buffer.get_end_iter(),
+                                                        text + "\n"))
+                    GLib.idle_add(
+                        lambda: log.scroll_to_mark(buffer.get_insert(), 0.0,
+                                                   True, 0.5, 0.5))
 
                 queries = {}
                 for query_string in query_file:
@@ -98,9 +100,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                                 song_path = song['~filename']
                                 file_ext = song("~filename").split('.')[-1]
-                                song_file_name = "{} - {} - {} - {}.{}".format(
-                                    song("genre"), song("artist"),
-                                    song("album"), song("title"), file_ext)
+                                song_file_name = "{}.{}".format(song("title"),
+                                                                file_ext)
                                 # workaround file naming limitations on fat32
                                 # formated drives
                                 valid_chars = "-_.() %s%s" % (
@@ -108,9 +109,15 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                 song_file_name = "".join(
                                     char for char in song_file_name if
                                     char in valid_chars)
-                                filename_list.append(song_file_name)
-                                dest_file = os.path.join(destination,
+                                folder = os.path.join(destination,
+                                                      song("artist"),
+                                                      song("album"))
+                                os.makedirs(folder, exist_ok=True)
+                                dest_file = os.path.join(folder,
                                                          song_file_name)
+                                filename_list.append(
+                                    os.path.join(folder, song_file_name))
+
                                 # skip existing files
                                 if os.path.exists(dest_file):
                                     append(
@@ -123,18 +130,28 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                             # delete files which are not
                             # in the saved searches anymore
-                            for existing_file in \
-                                    os.listdir(destination):
-                                if existing_file not in filename_list and not\
-                                        existing_file.startswith("."):
+                            for existing_file in Path(destination) \
+                                    .rglob('*.' + file_ext):
+                                if str(existing_file) not in filename_list:
                                     append(
                                         "Deleted '{}'.".format(existing_file))
-                                    os.remove(
-                                        destination + existing_file)
+                                    os.remove(str(existing_file))
+
+                            remove_empty_dirs(destination)
 
                             append("Synchronization finished.")
                         except FileNotFoundError as e:
                             append(str(e))
+
+                def remove_empty_dirs(path):
+                    for root, dirnames, filenames in os.walk(path,
+                                                             topdown=False):
+                        for dirname in dirnames:
+                            try:
+                                os.rmdir(os.path.realpath(
+                                    os.path.join(root, dirname)))
+                            except OSError:
+                                pass
 
                 def start(button):
                     self.running = True
@@ -150,9 +167,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                 destination_path_box = Gtk.HBox(spacing=3)
                 destination_entry = Gtk.Entry()
-                destination_entry.set_tooltip_text("The absolute path of your"
-                                                   " device, e.g. '/run/media/"
-                                                   "my-user/device-id/Music'")
                 destination_entry.set_text(
                     config.get('plugins', self.config_path_key, ''))
                 destination_entry.connect('changed', path_changed)
@@ -168,6 +182,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 stop_button.connect('clicked', stop)
 
                 vbox.pack_start(destination_path_box, True, True, 0)
+                dest = "( e.g. the absolute path to your SD card. If you " \
+                       "mount your device with MTP, I suggest specifying a " \
+                       "local destination folder and transferring it to your" \
+                       "device with rsync. )"
+                label = Gtk.Label(label=_(dest))
+                label.set_alignment(0.0, 0.5)
+                vbox.pack_start(label, True, True, 0)
                 vbox.pack_start(start_button, True, True, 0)
                 vbox.pack_start(stop_button, True, True, 0)
                 vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
