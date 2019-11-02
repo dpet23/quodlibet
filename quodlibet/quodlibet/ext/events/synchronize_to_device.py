@@ -122,7 +122,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                 if os.path.exists(dest_file):
                                     append(
                                         "Skipped '{}' because it already "
-                                        "exists.".format(song_file_name))
+                                        "exists.".format(dest_file))
                                 else:
                                     append(
                                         "Writing '{}'...".format(dest_file))
