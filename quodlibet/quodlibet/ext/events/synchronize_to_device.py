@@ -130,7 +130,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                             # delete files which are not
                             # in the saved searches anymore
-                            for existing_file in Path(destination).rglob('*.*'):
+                            for existing_file in Path(destination) \
+                                    .rglob('*.*'):
                                 if str(existing_file) not in filename_list:
                                     append(
                                         "Deleted '{}'.".format(existing_file))
