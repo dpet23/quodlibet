@@ -1,4 +1,3 @@
-# -*- encoding: utf-8 -*-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -498,6 +497,15 @@ class TQuery(TestCase):
         self.failUnless(Query("#(date > 4)").search(self.s1))
         self.failUnless(Query("#(date > 0004)").search(self.s1))
         self.failUnless(Query("#(date > 0000)").search(self.s1))
+
+    def test_ignore_characters(self):
+        try:
+            config.set("browsers", "ignored_characters", "-")
+            self.failUnless(Query("Foo the Bar - mu").search(self.s2))
+            config.set("browsers", "ignored_characters", "1234")
+            self.failUnless(Query("4Fo13o 2th2e3 4Bar4").search(self.s2))
+        finally:
+            config.reset("browsers", "ignored_characters")
 
 
 class TQuery_get_type(TestCase):

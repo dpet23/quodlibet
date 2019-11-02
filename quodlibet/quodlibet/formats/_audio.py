@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2005 Joe Wreschnig, Michael Urman
 #           2012-2017 Nick Boultbee
 #
@@ -137,7 +136,7 @@ class AudioFile(dict, ImageContainer):
             self[key] = value
 
     def __song_key(self):
-        return (self("~#disc", 1), self("~#track", 1),
+        return (self("~#disc", 0), self("~#track", 0),
             human(self("artistsort")),
             self.get("musicbrainz_artistid", ""),
             human(self.get("title", "")),
@@ -427,7 +426,12 @@ class AudioFile(dict, ImageContainer):
             elif key == "lyrics":
                 # First, try the embedded lyrics.
                 try:
-                    return self[key]
+                    return self["lyrics"]
+                except KeyError:
+                    pass
+
+                try:
+                    return self["unsyncedlyrics"]
                 except KeyError:
                     pass
 
@@ -1016,7 +1020,7 @@ class AudioFile(dict, ImageContainer):
         used when the song does not have replaygain information.
         """
         for profile in profiles:
-            if profile is "none":
+            if profile == "none":
                 return 1.0
             try:
                 db = float(self["replaygain_%s_gain" % profile].split()[0])

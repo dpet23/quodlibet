@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -24,7 +23,7 @@ except ImportError:
     pass
 
 from quodlibet.player import PlayerError
-from quodlibet.util import sanitize_tags, is_flatpak
+from quodlibet.util import sanitize_tags, is_flatpak, matches_flatpak_runtime
 from quodlibet.formats import MusicFile
 from quodlibet import config
 
@@ -253,11 +252,14 @@ class TGStreamerCodecs(TestCase):
             "test.spc",
             "test.vgm",
             "test.wma",
-            "silence-44-s.spx",
             "empty.xm",
             "h264_aac.mp4",
             "h265_aac.mp4"
         ]
+
+        if not matches_flatpak_runtime("*org.gnome.*/3.32"):
+            # https://gitlab.com/freedesktop-sdk/freedesktop-sdk/issues/809
+            files.append("silence-44-s.spx")
 
         errors = []
         for file_ in files:

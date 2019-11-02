@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2011 Joe Wreschnig, Michael Urman, Steven Robertson,
 #           2011-2014 Christoph Reiter
 #
@@ -524,7 +523,7 @@ class GStreamerPlayer(BasePlayer, GStreamerPluginHandler):
 
         if not self.has_external_volume:
             # Restore volume/ReplayGain and mute state
-            self.volume = self._volume
+            self.props.volume = self._volume
             self.mute = self._mute
 
         # ReplayGain information gets lost when destroying

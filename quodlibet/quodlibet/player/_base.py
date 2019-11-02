@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2007-2008 Joe Wreschnig
 #           2009,2010 Steven Robertson
 #           2009-2013 Christoph Reiter
@@ -152,11 +151,12 @@ class BasePlayer(GObject.GObject, Equalizer):
 
     @property
     def volume(self):
-        return self.props.volume
+        """Use a cubic scale for the externally exposed volume"""
+        return self.props.volume ** (1.0 / 3.0)
 
     @volume.setter
     def volume(self, v):
-        self.props.volume = min(1.0, max(0.0, v))
+        self.props.volume = min(1.0, max(0.0, v ** 3.0))
 
     @property
     def mute(self):

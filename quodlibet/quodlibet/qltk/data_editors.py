@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2012-2016 Nick Boultbee
 #
 # This program is free software; you can redistribute it and/or modify
@@ -369,7 +368,7 @@ class TagListEditor(qltk.Window):
         self.view.remove_selection()
 
     def __add(self, *args):
-        tooltip = _('Tag expression e.g. people:real or ~album~year.')
+        tooltip = _('Tag expression e.g. people:real or ~album~year')
         dialog = GetStringDialog(self, _("Enter new tag"), "",
                                  button_icon=None,
                                  tooltip=tooltip)
