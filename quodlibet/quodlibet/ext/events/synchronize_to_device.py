@@ -100,18 +100,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                                 song_path = song['~filename']
                                 file_ext = song("~filename").split('.')[-1]
-                                song_file_name = "{}.{}".format(song("title"),
-                                                                file_ext)
-                                # workaround file naming limitations on fat32
-                                # formated drives
-                                valid_chars = "-_.() %s%s" % (
-                                    string.ascii_letters, string.digits)
-                                song_file_name = "".join(
-                                    char for char in song_file_name if
-                                    char in valid_chars)
+                                song_file_name = filter_valid_chars(
+                                    "{}.{}".format(song("title"), file_ext))
+
                                 folder = os.path.join(destination,
-                                                      song("artist"),
-                                                      song("album"))
+                                                      filter_valid_chars(
+                                                          song("artist")),
+                                                      filter_valid_chars(
+                                                          song("album")))
                                 os.makedirs(folder, exist_ok=True)
                                 dest_file = os.path.join(folder,
                                                          song_file_name)
@@ -135,7 +131,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                 if str(existing_file) not in filename_list:
                                     append(
                                         "Deleted '{}'.".format(existing_file))
-                                    os.remove(str(existing_file))
+                                    try:
+                                        os.remove(str(existing_file))
+                                    except IsADirectoryError:
+                                        pass
 
                             remove_empty_dirs(destination)
 
@@ -152,6 +151,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                     os.path.join(root, dirname)))
                             except OSError:
                                 pass
+
+                # workaround file naming limitations on fat32
+                # formated drives
+                def filter_valid_chars(str):
+                    valid_chars = "-_.() %s%s" % (
+                        string.ascii_letters, string.digits)
+                    return "".join(char for char in str if char in valid_chars)
 
                 def start(button):
                     self.running = True
