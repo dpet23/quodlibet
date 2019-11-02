@@ -173,9 +173,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                 destination_path_box = Gtk.HBox(spacing=3)
                 destination_entry = Gtk.Entry()
-                destination_entry.set_tooltip_text("The absolute path of your"
-                                                   " device, e.g. '/run/media/"
-                                                   "my-user/device-id/Music'")
                 destination_entry.set_text(
                     config.get('plugins', self.config_path_key, ''))
                 destination_entry.connect('changed', path_changed)
@@ -191,6 +188,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 stop_button.connect('clicked', stop)
 
                 vbox.pack_start(destination_path_box, True, True, 0)
+                dest = "( The absolute path to your device. For " \
+                       "Android + Linux users it's something like " \
+                       "`/run/user/1000/gvfs/mtp:host=SAMSUNG_Android/Music`)"
+                label = Gtk.Label(label=_(dest))
+                label.set_alignment(0.0, 0.5)
+                vbox.pack_start(label, True, True, 0)
                 vbox.pack_start(start_button, True, True, 0)
                 vbox.pack_start(stop_button, True, True, 0)
                 vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
