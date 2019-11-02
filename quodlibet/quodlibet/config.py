@@ -39,6 +39,9 @@ INITIAL = {
 
         "gst_device": "",
         "gst_disable_gapless": "false",
+
+        "is_playing": "false",
+        "restore_playing": "false",
     },
     "library": {
         "exclude": "",
@@ -65,7 +68,7 @@ INITIAL = {
         "shufflequeue": "false",
         "queue_stop_at_end": "false",
         "queue_keep_songs": "false",
-        "queue_ignore": "false",
+        "queue_disable": "false",
 
         # <reversed?>tagname, song list sort
         "sortby": "0album",
@@ -155,7 +158,7 @@ INITIAL = {
         "covergrid_magnification": "3.0",
 
         # show "all albums" in covergrid view
-        "covergrid_all": "0",
+        "covergrid_all": "1",
     },
 
     # Kind of a dumping ground right now, should probably be
@@ -215,6 +218,9 @@ INITIAL = {
         # scrollbar does not fade out when inactive
         "scrollbar_always_visible":
             "true" if (is_osx() or is_windows()) else "false",
+
+        # Force fontconfig as PangoCairo backend
+        "pangocairo_force_fontconfig": False,
     },
 
     "rename": {
@@ -244,6 +250,9 @@ INITIAL = {
     "editing": {
         # characters to split tags on
         "split_on": "/ & ,",
+
+        # characters used when extracting subtitles/subtags
+        "sub_split_on": "\u301c\u301c \uff08\uff09 [] () ~~ --",
 
         # ID3 encodings to try
         "id3encoding": "",
