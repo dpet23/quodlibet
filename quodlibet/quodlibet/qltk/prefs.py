@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2009 Joe Wreschnig, Michael Urman, Iñigo Serna,
 #                     Steven Robertson
 #           2011-2017 Nick Boultbee
@@ -608,7 +607,7 @@ class PreferencesWindow(UniqueWindow):
             split_entry.set_tooltip_text(
                 _("A set of separators to use when splitting tag values "
                   "in the tag editor. "
-                  "The list is space-separated"))
+                  "The list is space-separated."))
             split_entry.props.expand = True
 
             sub_entry = UndoEntry()

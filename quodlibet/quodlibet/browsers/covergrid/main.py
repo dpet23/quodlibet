@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2007 Joe Wreschnig, Michael Urman, Iñigo Serna
 #           2009-2010 Steven Robertson
 #           2012-2018 Nick Boultbee
@@ -614,6 +613,7 @@ class CoverGrid(Browser, util.InstanceTracker, VisibleUpdate,
         self.__inhibit()
         changed = self.select_by_func(
             lambda r: r[0].album and r[0].album.key in values)
+        self.view.grab_focus()
         self.__uninhibit()
         if changed:
             self.activate()

@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2010, 2012-2014 Christoph Reiter
 #                      2017 Uriel Zajaczkovski
 #                 2017-2018 Nick Boultbee
@@ -371,6 +370,7 @@ class CollectionBrowser(Browser, util.InstanceTracker):
                   [self.__albums.get(k) for k in album_keys] if a is not None]
         if albums:
             self.view.select_album(albums[0], unselect=True)
+            self.view.grab_focus()
         for album in albums[1:]:
             self.view.select_album(album, unselect=False)
 

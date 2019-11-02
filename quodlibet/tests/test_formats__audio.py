@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
 # the Free Software Foundation; either version 2 of the License, or
@@ -597,6 +596,13 @@ class TAudioFile(TestCase):
             os.remove(af.lyric_filename)
             os.rmdir(lyrics_dir)
 
+    def test_unsynced_lyrics(self):
+        song = AudioFile()
+        song["unsyncedlyrics"] = "lala"
+        assert song("~lyrics") == "lala"
+        assert song("unsyncedlyrics") == "lala"
+        assert song("lyrics") != "lala"
+
     def test_mountpoint(self):
         song = AudioFile()
         song["~filename"] = fsnative(u"filename")
@@ -870,12 +876,12 @@ class TAudioFile(TestCase):
 
     def test_sort_key_defaults(self):
         AF = AudioFile
-        assert AF().sort_key == AF({"tracknumber": "1"}).sort_key
-        assert AF().sort_key == AF({"tracknumber": "1/1"}).sort_key
+        assert AF().sort_key == AF({"tracknumber": "0"}).sort_key
+        assert AF().sort_key != AF({"tracknumber": "1/1"}).sort_key
         assert AF().sort_key < AF({"tracknumber": "2/2"}).sort_key
 
-        assert AF().sort_key == AF({"discnumber": "1"}).sort_key
-        assert AF().sort_key == AF({"discnumber": "1/1"}).sort_key
+        assert AF().sort_key == AF({"discnumber": "0"}).sort_key
+        assert AF().sort_key != AF({"discnumber": "1/1"}).sort_key
         assert AF().sort_key < AF({"discnumber": "2/2"}).sort_key
 
     def test_sort_cache(self):

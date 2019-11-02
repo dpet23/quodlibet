@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2015 Anton Shestakov
 #
 # This program is free software; you can redistribute it and/or modify
@@ -55,7 +54,7 @@ class TPluginStyle(PluginTestCase):
         REASON_ABSENT = "plugin should have PLUGIN_DESC"
         REASON_DOT = "PLUGIN_DESC should be a full sentence and end with a '.'"
 
-        skip_plugins = L('pickle_test')
+        skip_plugins = L('pickle_plugin')
         fails = []
 
         for pid, plugin in self.plugins.items():

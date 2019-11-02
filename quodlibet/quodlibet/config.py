@@ -1,7 +1,7 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2008 Joe Wreschnig
 #           2009-2017 Nick Boultbee
 #           2011-2014 Christoph Reiter
+#           2018-2019 Peter Strulo
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -106,11 +106,17 @@ INITIAL = {
         # selected pane values
         "pane_selection": "",
 
+        # browser orientation
+        "pane_mode": const.COLUMN_MODE_SMALL,
+
         # equal pane width in paned browser
         "equal_pane_width": "true",
 
         # "global" filter for SearchBar
         "background": "",
+
+        # characters ignored in queries
+        "ignored_characters": "",
 
         # album list
         "albums": "",
@@ -141,6 +147,9 @@ INITIAL = {
 
         # Show the limit widgets for SearchBar
         "search_limit": "false",
+
+        # Allow multiple queries in SearchBar
+        "multiple_queries": "false",
 
         # show text in covergrid view
         "album_text": "1",

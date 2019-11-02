@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2008 Joe Wreschnig, Michael Urman, Iñigo Serna
 #           2009,2010 Steven Robertson
 #           2009-2013 Christoph Reiter
@@ -27,8 +26,9 @@ from quodlibet.qltk.x import ScrolledWindow, Align
 from quodlibet.util.library import background_filter
 from quodlibet.util import connect_destroy
 from quodlibet.qltk.paned import ConfigMultiRHPaned
+from quodlibet.const import COLUMN_MODE_WIDE, COLUMN_MODE_COLUMNAR
 
-from .prefs import PreferencesButton, ColumnMode
+from .prefs import PreferencesButton
 from .util import get_headers
 from .pane import Pane
 
@@ -121,13 +121,13 @@ class PanedBrowser(Browser, util.InstanceTracker):
         hor = Gtk.Orientation.HORIZONTAL
         ver = Gtk.Orientation.VERTICAL
 
-        if mode == ColumnMode.WIDE:
+        if mode == COLUMN_MODE_WIDE:
             self.main_box.props.orientation = hor
             self.multi_paned.change_orientation(horizontal=False)
-        elif mode == ColumnMode.COLUMNAR:
+        elif mode == COLUMN_MODE_COLUMNAR:
             self.main_box.props.orientation = hor
             self.multi_paned.change_orientation(horizontal=True)
-        else:  # ColumnMode.SMALL
+        else:  # COLUMN_MODE_SMALL
             self.main_box.props.orientation = ver
             self.multi_paned.change_orientation(horizontal=True)
 
@@ -239,8 +239,7 @@ class PanedBrowser(Browser, util.InstanceTracker):
             tags = [t for t in p.tags if not t.startswith("~#")]
             self.__star.update(dict.fromkeys(tags))
 
-        self.set_column_mode(config.getint("browsers", "pane_mode",
-                                           ColumnMode.SMALL))
+        self.set_column_mode(config.gettext("browsers", "pane_mode"))
 
     def fill_panes(self):
         self._panes[-1].inhibit()
@@ -273,6 +272,7 @@ class PanedBrowser(Browser, util.InstanceTracker):
         for pane in self._panes:
             if pane is filter_pane:
                 filter_pane.set_selected_by_tag(tag, values, True)
+                filter_pane.grab_focus()
                 return
             pane.set_selected([None], True)
 
@@ -323,6 +323,8 @@ class PanedBrowser(Browser, util.InstanceTracker):
 
     def finalize(self, restored):
         config.settext("browsers", "query_text", u"")
+        if not restored:
+            self.fill_panes()
 
     def fill(self, songs):
         GLib.idle_add(self.songs_selected, list(songs))

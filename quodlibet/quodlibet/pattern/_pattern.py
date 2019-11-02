@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2004-2010 Joe Wreschnig, Michael Urman
 # Copyright 2010,2013 Christoph Reiter
 # Copyright 2013-2015 Nick Boultbee
@@ -135,7 +134,7 @@ class PatternParser(object):
         tag = self.lookahead.lexeme
         # fix bad tied tags
         if tag[:1] != "~" and "~" in tag:
-                tag = "~" + tag
+            tag = "~" + tag
         try:
             self.match(TEXT)
         except ParseError:

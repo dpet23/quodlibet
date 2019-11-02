@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 # Copyright 2010,2012 Christoph Reiter <reiter.christoph@gmail.com>
 #
 # This program is free software; you can redistribute it and/or modify
@@ -386,6 +385,7 @@ value="false"/>
             elif name == "Metadata":
                 return self.__get_metadata()
             elif name == "Volume":
+                # https://gitlab.freedesktop.org/mpris/mpris-spec/issues/8
                 return player.volume
             elif name == "Position":
                 return player.get_position() * 1000

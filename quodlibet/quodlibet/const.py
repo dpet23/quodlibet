@@ -82,7 +82,7 @@ SUPPORT_EMAIL = "quod-libet-development@googlegroups.com"
 
 # about dialog, --version etc.
 WEBSITE = "https://quodlibet.readthedocs.org/"
-COPYRIGHT = u"Copyright 2004-2018"
+COPYRIGHT = u"Copyright 2004-2019"
 
 AUTHORS = sorted(u"""\
 Alexandre Passos
@@ -161,12 +161,14 @@ Phoenix Dailey
 Quincy John Hamilton
 Remi Vanicat
 Robert Muth
+Ruud van Asseldonk
 Ryan Turner
 Sebastian Thürrschmidt
 Simonas Kazlauskas
 Simon Larsen
 Steven Robertson
 Thomas Vogt
+Till Berger
 Tobias Wolf
 Tomasz Miasko
 Tomasz Torcz
@@ -179,7 +181,6 @@ Zack Weinberg
 Vimalan Reddy
 Jason Heard
 David Pérez Carmona
-Jakub Wilk
 IBBoard@github
 CreamyCookie@github
 Sauyon Lee
@@ -192,12 +193,13 @@ Muges@github
 Meriipu@github
 Jonas Platte
 Eyenseo@github
-Peter Simonyi
 dpitch40@github
 sphh@github
 zsau@github
 luk1337@github
 luzpaz@github
+a-vrma@github
+Phidica@github
 """.strip().split("\n"))
 
 TRANSLATORS = sorted(u"""
@@ -206,6 +208,7 @@ Alexandre Passos (pt)
 Andreas Bertheussen (nb)
 Olivier Humbert (fr)
 Anton Shestakov (ru)
+Avi Markovitz (he)
 Bastian Kleineidam (de)
 Bastien Gorissen (fr)
 Byung-Hee HWANG (ko)
@@ -273,5 +276,9 @@ Fabien Devaux
 # Default songlist column headers
 DEFAULT_COLUMNS = "~#track ~people ~title~version ~album~discsubtitle " \
                   "~#length".split()
+
+COLUMN_MODE_SMALL = "Small"
+COLUMN_MODE_WIDE = "Wide"
+COLUMN_MODE_COLUMNAR = "Columnar"
 
 DEBUG = ("--debug" in sys.argv or "QUODLIBET_DEBUG" in os.environ)
