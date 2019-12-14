@@ -127,7 +127,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                             # delete files which are not
                             # in the saved searches anymore
                             for existing_file in Path(destination) \
-                                    .rglob('*.*'):
+                                    .rglob('*.' + file_ext):
                                 if str(existing_file) not in filename_list:
                                     append(
                                         "Deleted '{}'.".format(existing_file))
@@ -188,9 +188,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 stop_button.connect('clicked', stop)
 
                 vbox.pack_start(destination_path_box, True, True, 0)
-                dest = "( The absolute path to your device. For " \
-                       "Android + Linux users it's something like " \
-                       "`/run/user/1000/gvfs/mtp:host=SAMSUNG_Android/Music`)"
+                dest = "( e.g. the absolute path to your SD card. If you " \
+                       "mount your device with MTP, I suggest specifying a " \
+                       "local destination folder and transferring it to your" \
+                       "device with rsync. )"
                 label = Gtk.Label(label=_(dest))
                 label.set_alignment(0.0, 0.5)
                 vbox.pack_start(label, True, True, 0)
