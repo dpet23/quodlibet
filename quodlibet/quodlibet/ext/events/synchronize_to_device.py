@@ -35,8 +35,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_NAME = _("Synchronize to Device")
     PLUGIN_DESC = _(
         "Synchronizes all songs from the selected saved searches with the "
-        "specified folder. All songs in that folder, which are not in the "
-        "saved searches, will be deleted.")
+        "specified folder.\n"
+        "All songs in the destination folder that aren't in the saved searches "
+        "will be deleted."
+    )
     config_path_key = __name__ + '_path'
 
     def PluginPreferences(self, parent):
@@ -198,9 +200,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                 vbox.pack_start(destination_path_box, True, True, 0)
                 dest = "( e.g. the absolute path to your SD card. If you " \
-                       "mount your device with MTP, I suggest specifying a " \
-                       "local destination folder and transferring it to your" \
-                       "device with rsync. )"
+                       "mount your device with MTP, specify a local " \
+                       "destination folder and transfer it to your device " \
+                       "with rsync. )"
                 label = Gtk.Label(label=_(dest))
                 label.set_alignment(0.0, 0.5)
                 vbox.pack_start(label, True, True, 0)
@@ -209,7 +211,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
                 vbox.pack_start(scroll, True, True, 0)
                 return qltk.Frame(
-                    _("The following saved searches shall be synchronized:"),
+                    _("Synchronize the following saved searches:"),
                     child=vbox)
         except NoSavedQueriesError:
             return qltk.Frame(
