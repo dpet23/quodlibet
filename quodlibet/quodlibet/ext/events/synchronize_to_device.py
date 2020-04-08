@@ -23,6 +23,13 @@ from quodlibet.query import Query
 from shutil import copyfile
 
 
+class NoSavedQueriesError(Exception):
+    """
+    Exception raised when there are no saved searches.
+    """
+    pass
+
+
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ID = "synchronize_to_device"
     PLUGIN_NAME = _("Synchronize to Device")
@@ -38,8 +45,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         query_path = os.path.join(get_user_dir(), 'lists', 'queries.saved')
         try:
             with open(query_path, 'r', encoding="utf-8") as query_file:
-                if not query_file.read(1):
-                    raise FileNotFoundError
                 log = Gtk.TextView()
                 log.set_left_margin(5)
                 log.set_right_margin(5)
@@ -60,6 +65,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 for query_string in query_file:
                     name = next(query_file).strip()
                     queries[name] = Query(query_string.strip())
+
+                if not queries:
+                    # query_file is empty
+                    raise NoSavedQueriesError
 
                 for query_name, query in queries.items():
                     check_button = ConfigCheckButton(query_name, "plugins",
@@ -202,6 +211,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 return qltk.Frame(
                     _("The following saved searches shall be synchronized:"),
                     child=vbox)
-        except FileNotFoundError:
+        except NoSavedQueriesError:
             return qltk.Frame(
                 _("No saved searches yet, create some and come back!"))
