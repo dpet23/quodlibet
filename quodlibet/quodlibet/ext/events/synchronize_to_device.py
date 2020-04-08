@@ -23,13 +23,22 @@ from quodlibet.query import Query
 from shutil import copyfile
 
 
+class NoSavedQueriesError(Exception):
+    """
+    Exception raised when there are no saved searches.
+    """
+    pass
+
+
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ID = "synchronize_to_device"
     PLUGIN_NAME = _("Synchronize to Device")
     PLUGIN_DESC = _(
         "Synchronizes all songs from the selected saved searches with the "
-        "specified folder. All songs in that folder, which are not in the "
-        "saved searches, will be deleted.")
+        "specified folder.\n"
+        "All songs in the destination folder that aren't in the saved searches "
+        "will be deleted."
+    )
     config_path_key = __name__ + '_path'
 
     def PluginPreferences(self, parent):
@@ -38,8 +47,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         query_path = os.path.join(get_user_dir(), 'lists', 'queries.saved')
         try:
             with open(query_path, 'r', encoding="utf-8") as query_file:
-                if not query_file.read(1):
-                    raise FileNotFoundError
                 log = Gtk.TextView()
                 log.set_left_margin(5)
                 log.set_right_margin(5)
@@ -60,6 +67,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 for query_string in query_file:
                     name = next(query_file).strip()
                     queries[name] = Query(query_string.strip())
+
+                if not queries:
+                    # query_file is empty
+                    raise NoSavedQueriesError
 
                 for query_name, query in queries.items():
                     check_button = ConfigCheckButton(query_name, "plugins",
@@ -189,9 +200,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                 vbox.pack_start(destination_path_box, True, True, 0)
                 dest = "( e.g. the absolute path to your SD card. If you " \
-                       "mount your device with MTP, I suggest specifying a " \
-                       "local destination folder and transferring it to your" \
-                       "device with rsync. )"
+                       "mount your device with MTP, specify a local " \
+                       "destination folder and transfer it to your device " \
+                       "with rsync. )"
                 label = Gtk.Label(label=_(dest))
                 label.set_alignment(0.0, 0.5)
                 vbox.pack_start(label, True, True, 0)
@@ -200,8 +211,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
                 vbox.pack_start(scroll, True, True, 0)
                 return qltk.Frame(
-                    _("The following saved searches shall be synchronized:"),
+                    _("Synchronize the following saved searches:"),
                     child=vbox)
-        except FileNotFoundError:
+        except NoSavedQueriesError:
             return qltk.Frame(
                 _("No saved searches yet, create some and come back!"))
