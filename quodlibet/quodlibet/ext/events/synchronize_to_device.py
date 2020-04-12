@@ -30,9 +30,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_NAME = _("Synchronize to Device")
     PLUGIN_DESC = _(
         "Synchronizes all songs from the selected saved searches with the "
-        "specified folder.\n"
-        "All songs in the destination folder that aren't in the saved searches "
-        "will be deleted."
+        "specified folder."
     )
     config_path_key = __name__ + '_path'
 
@@ -188,6 +186,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Destination path entry field
         destination_entry = Gtk.Entry()
+        destination_entry.set_placeholder_text(
+            _("e.g. the absolute path to your SD card"))
         destination_entry.set_text(
             config.get('plugins', self.config_path_key, ''))
         destination_entry.connect('changed', path_changed)
@@ -196,17 +196,30 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         destination_path_box = Gtk.HBox(spacing=self.spacing_small)
         destination_path_box.pack_start(destination_entry, True, True, 0)
 
-        # Destination path hint
-        dest_label = (_("( e.g. the absolute path to your SD card. For devices "
-                        "mounted with MTP, specify a local destination folder "
-                        "and transfer it to your device with rsync. )"))
-        label = Gtk.Label(label=_(dest_label))
-        label.set_alignment(0.0, 0.5)
+        def make_label_with_icon(label, icon_name):
+            """ Create a new label with an icon to the left of the text """
+            hbox = Gtk.HBox(spacing=self.spacing_large)
+            image = Gtk.Image.new_from_icon_name(icon_name, Gtk.IconSize.BUTTON)
+            hbox.pack_start(image, False, False, 0)
+            label = Gtk.Label(label=label, xalign=0.0, yalign=0.5, wrap=True)
+            hbox.pack_start(label, True, True, 0)
+            return hbox
+
+        # Destination path information
+        destination_warn_label = make_label_with_icon(
+            _("All pre-existing songs in the destination folder that aren't in "
+              "the saved searches will be deleted."),
+            Icons.DIALOG_WARNING)
+        destination_info_label = make_label_with_icon(
+            _("For devices mounted with MTP, specify a local destination "
+              "folder and transfer it to your device with rsync."),
+            Icons.DIALOG_INFORMATION)
 
         # Destination path frame
         destination_vbox = Gtk.VBox(spacing=self.spacing_large)
         destination_vbox.pack_start(destination_path_box, True, True, 0)
-        destination_vbox.pack_start(label, True, True, 0)
+        destination_vbox.pack_start(destination_warn_label, True, True, 0)
+        destination_vbox.pack_start(destination_info_label, True, True, 0)
         frame = qltk.Frame(label=_("Destination path:"), child=destination_vbox)
         vbox.pack_start(frame, True, True, 0)
 
