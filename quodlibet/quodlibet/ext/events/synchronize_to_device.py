@@ -43,8 +43,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     )
     config_path_key = __name__ + '_path'
 
+    spacing_main = 20
+    spacing_large = 6
+    spacing_small = 3
+
     def PluginPreferences(self, parent):
-        vbox = Gtk.VBox(spacing=6)
+        vbox = Gtk.VBox(spacing=self.spacing_main)
 
         query_path = os.path.join(get_user_dir(), 'lists', 'queries.saved')
         try:
@@ -74,12 +78,18 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     # query_file is empty
                     raise NoSavedQueriesError
 
+                # Saved search selection section
+                saved_search_vbox = Gtk.VBox(spacing=self.spacing_large)
                 for query_name, query in queries.items():
                     check_button = ConfigCheckButton(query_name, "plugins",
                                                      self._config_key(
                                                          query_name))
                     check_button.set_active(self.config_get_bool(query_name))
-                    vbox.pack_start(check_button, False, True, 0)
+                    saved_search_vbox.pack_start(check_button, False, True, 0)
+                frame = qltk.Frame(
+                    label=_("Synchronize the following saved searches:"),
+                    child=saved_search_vbox)
+                vbox.pack_start(frame, True, True, 0)
 
                 def synchronize():
                     enabled_queries = []
@@ -190,22 +200,42 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     config.set('plugins', self.config_path_key,
                                entry.get_text())
 
-                destination_path_box = Gtk.HBox(spacing=3)
+                # Destination path entry field
                 destination_entry = Gtk.Entry()
                 destination_entry.set_text(
                     config.get('plugins', self.config_path_key, ''))
                 destination_entry.connect('changed', path_changed)
-                destination_path_box.pack_start(
-                    Gtk.Label(label=_("Destination path:")), False, False, 0)
+
+                # Destination path hbox
+                destination_path_box = Gtk.HBox(spacing=self.spacing_small)
                 destination_path_box.pack_start(destination_entry, True, True,
                                                 0)
 
+                # Destination path hint
+                dest_label = ("( e.g. the absolute path to your SD card. "
+                             "If you mount your device with MTP, specify a "
+                             "local destination folder and transfer it to your "
+                             "device with rsync. )")
+                label = Gtk.Label(label=_(dest_label))
+                label.set_alignment(0.0, 0.5)
+
+                # Destination path section
+                destination_vbox = Gtk.VBox(spacing=self.spacing_large)
+                destination_vbox.pack_start(destination_path_box, True, True, 0)
+                destination_vbox.pack_start(label, True, True, 0)
+                frame = qltk.Frame(
+                    label=_("Destination path:"),
+                    child=destination_vbox)
+                vbox.pack_start(frame, True, True, 0)
+
+                # Start button
                 start_button = qltk.Button(label=_("Start synchronization"),
                                            icon_name=Icons.DOCUMENT_SAVE)
                 start_button.connect('clicked', start)
                 start_button.set_visible(True)
                 self._start_button = start_button
 
+                # Stop button
                 stop_button = qltk.Button(label=_("Stop synchronization"),
                                           icon_name=Icons.PROCESS_STOP)
                 stop_button.connect('clicked', stop)
@@ -213,21 +243,15 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 stop_button.set_no_show_all(True)
                 self._stop_button = stop_button
 
-                vbox.pack_start(destination_path_box, True, True, 0)
-                dest = "( e.g. the absolute path to your SD card. If you " \
-                       "mount your device with MTP, specify a local " \
-                       "destination folder and transfer it to your device " \
-                       "with rsync. )"
-                label = Gtk.Label(label=_(dest))
-                label.set_alignment(0.0, 0.5)
-                vbox.pack_start(label, True, True, 0)
-                vbox.pack_start(start_button, True, True, 0)
-                vbox.pack_start(stop_button, True, True, 0)
-                vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
-                vbox.pack_start(scroll, True, True, 0)
-                return qltk.Frame(
-                    _("Synchronize the following saved searches:"),
-                    child=vbox)
+                # Run section
+                run_vbox = Gtk.VBox(spacing=self.spacing_large)
+                run_vbox.pack_start(start_button, True, True, 0)
+                run_vbox.pack_start(stop_button, True, True, 0)
+                run_vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
+                run_vbox.pack_start(scroll, True, True, 0)
+                vbox.pack_start(run_vbox, True, True, 0)
+
+                return vbox
         except NoSavedQueriesError:
             return qltk.Frame(
                 _("No saved searches yet, create some and come back!"))
