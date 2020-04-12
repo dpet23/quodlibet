@@ -53,6 +53,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         query_path = os.path.join(get_user_dir(), 'lists', 'queries.saved')
         try:
             with open(query_path, 'r', encoding="utf-8") as query_file:
+                # Define output window
                 log = Gtk.TextView()
                 log.set_left_margin(5)
                 log.set_right_margin(5)
@@ -63,12 +64,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 scroll.add(log)
 
                 def append(text):
+                    """ Print text to the output TextView window. """
                     GLib.idle_add(lambda: buffer.insert(buffer.get_end_iter(),
                                                         text + "\n"))
                     GLib.idle_add(
                         lambda: log.scroll_to_mark(buffer.get_insert(), 0.0,
                                                    True, 0.5, 0.5))
 
+                # Read saved searches from file
                 queries = {}
                 for query_string in query_file:
                     name = next(query_file).strip()
@@ -78,7 +81,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     # query_file is empty
                     raise NoSavedQueriesError
 
-                # Saved search selection section
+                # Saved search selection frame
                 saved_search_vbox = Gtk.VBox(spacing=self.spacing_large)
                 for query_name, query in queries.items():
                     check_button = ConfigCheckButton(query_name, "plugins",
@@ -92,6 +95,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 vbox.pack_start(frame, True, True, 0)
 
                 def synchronize():
+                    """
+                    Synchronize the songs from the selected saved searches
+                    with the specified folder
+                    """
                     enabled_queries = []
                     for query_name, query in queries.items():
                         if self.config_get_bool(query_name):
@@ -116,7 +123,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                     append("Stopped the synchronization.")
                                     return
 
-                                # prevent the application from becoming
+                                # Prevent the application from becoming
                                 # unreponsive
                                 while Gtk.events_pending():
                                     Gtk.main_iteration()
@@ -137,7 +144,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                 filename_list.append(
                                     os.path.join(folder, song_file_name))
 
-                                # skip existing files
+                                # Skip existing files
                                 if os.path.exists(dest_file):
                                     append(
                                         "Skipped '{}' because it already "
@@ -147,7 +154,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                         "Writing '{}'…".format(dest_file))
                                     copyfile(song_path, dest_file)
 
-                            # delete files which are not
+                            # Delete files which are not
                             # in the saved searches anymore
                             for existing_file in Path(destination) \
                                     .rglob('*.' + file_ext):
@@ -166,6 +173,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                             append(str(e))
 
                 def remove_empty_dirs(path):
+                    """ Delete all empty sub-directories from the given path """
                     for root, dirnames, filenames in os.walk(path,
                                                              topdown=False):
                         for dirname in dirnames:
@@ -175,14 +183,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                             except OSError:
                                 pass
 
-                # workaround file naming limitations on fat32
-                # formated drives
                 def filter_valid_chars(str):
+                    """ Remove invalid FAT32 filename characters """
                     valid_chars = "-_.() %s%s" % (
                         string.ascii_letters, string.digits)
                     return "".join(char for char in str if char in valid_chars)
 
                 def start(button):
+                    """ Start the song synchronization """
                     self.running = True
                     self._start_button.set_visible(False)
                     self._stop_button.set_visible(True)
@@ -191,12 +199,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     self._stop_button.set_visible(False)
 
                 def stop(button):
+                    """ Stop the song synchronization """
                     append("Stopping…")
                     self.running = False
                     self._start_button.set_visible(True)
                     self._stop_button.set_visible(False)
 
                 def path_changed(entry):
+                    """ Save the destination path to the global config """
                     config.set('plugins', self.config_path_key,
                                entry.get_text())
 
@@ -219,7 +229,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 label = Gtk.Label(label=_(dest_label))
                 label.set_alignment(0.0, 0.5)
 
-                # Destination path section
+                # Destination path frame
                 destination_vbox = Gtk.VBox(spacing=self.spacing_large)
                 destination_vbox.pack_start(destination_path_box, True, True, 0)
                 destination_vbox.pack_start(label, True, True, 0)
@@ -243,7 +253,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 stop_button.set_no_show_all(True)
                 self._stop_button = stop_button
 
-                # Run section
+                # Section for the action buttons and output window
                 run_vbox = Gtk.VBox(spacing=self.spacing_large)
                 run_vbox.pack_start(start_button, True, True, 0)
                 run_vbox.pack_start(stop_button, True, True, 0)
