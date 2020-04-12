@@ -174,11 +174,17 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
                 def start(button):
                     self.running = True
+                    self._start_button.set_visible(False)
+                    self._stop_button.set_visible(True)
                     synchronize()
+                    self._start_button.set_visible(True)
+                    self._stop_button.set_visible(False)
 
                 def stop(button):
                     append("Stopping…")
                     self.running = False
+                    self._start_button.set_visible(True)
+                    self._stop_button.set_visible(False)
 
                 def path_changed(entry):
                     config.set('plugins', self.config_path_key,
@@ -197,10 +203,15 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 start_button = qltk.Button(label=_("Start synchronization"),
                                            icon_name=Icons.DOCUMENT_SAVE)
                 start_button.connect('clicked', start)
+                start_button.set_visible(True)
+                self._start_button = start_button
 
                 stop_button = qltk.Button(label=_("Stop synchronization"),
                                           icon_name=Icons.PROCESS_STOP)
                 stop_button.connect('clicked', stop)
+                stop_button.set_visible(False)
+                stop_button.set_no_show_all(True)
+                self._stop_button = stop_button
 
                 vbox.pack_start(destination_path_box, True, True, 0)
                 dest = "( e.g. the absolute path to your SD card. If you " \
