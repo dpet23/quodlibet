@@ -17,6 +17,7 @@ from quodlibet import get_user_dir
 from quodlibet import qltk
 from quodlibet.plugins import PluginConfigMixin
 from quodlibet.plugins.events import EventPlugin
+from quodlibet.qltk import Icons
 from quodlibet.qltk.ccb import ConfigCheckButton
 from quodlibet.query import Query
 
@@ -31,6 +32,7 @@ class NoSavedQueriesError(Exception):
 
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
+    PLUGIN_ICON = Icons.NETWORK_TRANSMIT
     PLUGIN_ID = "synchronize_to_device"
     PLUGIN_NAME = _("Synchronize to Device")
     PLUGIN_DESC = _(
@@ -98,7 +100,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                  "it!"))
                     else:
                         try:
-                            append("Starting...")
+                            append("Starting…")
                             for song in selected_songs:
                                 if not self.running:
                                     append("Stopped the synchronization.")
@@ -132,7 +134,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                         "exists.".format(dest_file))
                                 else:
                                     append(
-                                        "Writing '{}'...".format(dest_file))
+                                        "Writing '{}'…".format(dest_file))
                                     copyfile(song_path, dest_file)
 
                             # delete files which are not
@@ -175,7 +177,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     synchronize()
 
                 def stop(button):
-                    append("Stopping...")
+                    append("Stopping…")
                     self.running = False
 
                 def path_changed(entry):
@@ -192,10 +194,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 destination_path_box.pack_start(destination_entry, True, True,
                                                 0)
 
-                start_button = Gtk.Button(label=_("Start synchronization"))
+                start_button = qltk.Button(label=_("Start synchronization"),
+                                           icon_name=Icons.DOCUMENT_SAVE)
                 start_button.connect('clicked', start)
 
-                stop_button = Gtk.Button(label=_("Stop synchronization"))
+                stop_button = qltk.Button(label=_("Stop synchronization"),
+                                          icon_name=Icons.PROCESS_STOP)
                 stop_button.connect('clicked', stop)
 
                 vbox.pack_start(destination_path_box, True, True, 0)

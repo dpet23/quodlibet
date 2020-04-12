@@ -95,6 +95,7 @@ class Icons(str):
     MULTIMEDIA_VOLUME_CONTROL = "multimedia-volume-control"
     NETWORK_WORKGROUP = "network-workgroup"  # "_Network"
     NETWORK_SERVER = "network-server"
+    NETWORK_TRANSMIT = "network-transmit"
     PREFERENCES_SYSTEM = "preferences-system"  # "_Preferences"
     PREFERENCES_DESKTOP_SCREENSAVER = "preferences-desktop-screensaver"
     PREFERENCES_DESKTOP_THEME = "preferences-desktop-theme"
