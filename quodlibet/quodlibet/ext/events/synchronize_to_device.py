@@ -77,11 +77,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             check_button = ConfigCheckButton(query_name, "plugins",
                                              self._config_key(query_name))
             check_button.set_active(self.config_get_bool(query_name))
-            saved_search_vbox.pack_start(check_button, False, True, 0)
+            saved_search_vbox.pack_start(check_button, False, False, 0)
+        saved_search_scroll = Gtk.ScrolledWindow()
+        saved_search_scroll.set_min_content_height(0)
+        saved_search_scroll.set_max_content_height(300)
+        saved_search_scroll.set_propagate_natural_height(True)
+        saved_search_scroll.add(saved_search_vbox)
         frame = qltk.Frame(
             label=_("Synchronize the following saved searches:"),
-            child=saved_search_vbox)
-        vbox.pack_start(frame, True, True, 0)
+            child=saved_search_scroll)
+        vbox.pack_start(frame, False, False, 0)
 
         def synchronize():
             """
@@ -217,11 +222,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Destination path frame
         destination_vbox = Gtk.VBox(spacing=self.spacing_large)
-        destination_vbox.pack_start(destination_path_box, True, True, 0)
-        destination_vbox.pack_start(destination_warn_label, True, True, 0)
-        destination_vbox.pack_start(destination_info_label, True, True, 0)
+        destination_vbox.pack_start(destination_path_box, False, False, 0)
+        destination_vbox.pack_start(destination_warn_label, False, False, 0)
+        destination_vbox.pack_start(destination_info_label, False, False, 0)
         frame = qltk.Frame(label=_("Destination path:"), child=destination_vbox)
-        vbox.pack_start(frame, True, True, 0)
+        vbox.pack_start(frame, False, False, 0)
 
         # Start button
         start_button = qltk.Button(label=_("Start synchronization"),
@@ -240,10 +245,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Section for the action buttons and output window
         run_vbox = Gtk.VBox(spacing=self.spacing_large)
-        run_vbox.pack_start(start_button, True, True, 0)
-        run_vbox.pack_start(stop_button, True, True, 0)
-        run_vbox.pack_start(Gtk.Label(label=_("Progress:")), True, True, 0)
-        run_vbox.pack_start(scroll, True, True, 0)
-        vbox.pack_start(run_vbox, True, True, 0)
+        run_vbox.pack_start(start_button, False, False, 0)
+        run_vbox.pack_start(stop_button, False, False, 0)
+        run_vbox.pack_start(Gtk.Label(label=_("Progress:")), False, False, 0)
+        run_vbox.pack_start(scroll, False, False, 0)
+        vbox.pack_start(run_vbox, False, False, 0)
 
         return vbox
