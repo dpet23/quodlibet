@@ -170,24 +170,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
             return "".join(char for char in str if char in valid_chars)
 
-        def start(button):
-            """ Start the song synchronization """
-            self.running = True
-            self.start_button.set_visible(False)
-            self.stop_button.set_visible(True)
-            self.log_label.set_visible(True)
-            self.log.set_visible(True)
-            synchronize()
-            self.start_button.set_visible(True)
-            self.stop_button.set_visible(False)
-
-        def stop(button):
-            """ Stop the song synchronization """
-            append("Stopping…")
-            self.running = False
-            self.start_button.set_visible(True)
-            self.stop_button.set_visible(False)
-
         def path_changed(entry):
             """ Save the destination path to the global config """
             config.set('plugins', self.config_path_key, entry.get_text())
@@ -198,10 +180,48 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             text=config.get('plugins', self.config_path_key, '')
         )
         destination_entry.connect('changed', path_changed)
+        self.destination_entry = destination_entry
+
+        def select_destination_path(button):
+            """
+            Show a folder selection dialog to select the destination path
+            from the file system
+            """
+            dialog = Gtk.FileChooserDialog(
+                title=_("Choose destination path"),
+                action=Gtk.FileChooserAction.SELECT_FOLDER,
+                select_multiple=False, create_folders=True,
+                local_only=False, show_hidden=True)
+            dialog.add_buttons(
+                _("_Cancel"), Gtk.ResponseType.CANCEL,
+                _("_Save"), Gtk.ResponseType.OK
+            )
+            dialog.set_default_response(Gtk.ResponseType.OK)
+
+            # If there is an existing path in the entry field,
+            # make that path the default
+            destination_entry_text = self.destination_entry.get_text()
+            if destination_entry_text != "":
+                dialog.set_current_folder(destination_entry_text)
+
+            # Show the dialog and get the selected path
+            response = dialog.run()
+            response_path = ""
+            if response == Gtk.ResponseType.OK:
+                response_path = dialog.get_filename()
+
+            # Close the dialog and save the selected path
+            dialog.destroy()
+            self.destination_entry.set_text(response_path)
+
+        # Destination path selection button
+        destination_button = qltk.Button(label="", icon_name=Icons.FOLDER_OPEN)
+        destination_button.connect('clicked', select_destination_path)
 
         # Destination path hbox
         destination_path_box = Gtk.HBox(spacing=self.spacing_small)
         destination_path_box.pack_start(destination_entry, True, True, 0)
+        destination_path_box.pack_start(destination_button, False, False, 0)
 
         def make_label_with_icon(label, icon_name):
             """ Create a new label with an icon to the left of the text """
@@ -229,6 +249,24 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         destination_vbox.pack_start(destination_info_label, False, False, 0)
         frame = qltk.Frame(label=_("Destination path:"), child=destination_vbox)
         vbox.pack_start(frame, False, False, 0)
+
+        def start(button):
+            """ Start the song synchronization """
+            self.running = True
+            self.start_button.set_visible(False)
+            self.stop_button.set_visible(True)
+            self.log_label.set_visible(True)
+            self.log.set_visible(True)
+            synchronize()
+            self.start_button.set_visible(True)
+            self.stop_button.set_visible(False)
+
+        def stop(button):
+            """ Stop the song synchronization """
+            append("Stopping…")
+            self.running = False
+            self.start_button.set_visible(True)
+            self.stop_button.set_visible(False)
 
         # Start button
         start_button = qltk.Button(label=_("Start synchronization"),
