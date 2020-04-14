@@ -42,30 +42,23 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         vbox = Gtk.VBox(spacing=self.spacing_main)
 
         # Define output window
-        log_label = Gtk.Label(label=_("Progress:"))
-        log_label.set_visible(False)
-        log_label.set_no_show_all(True)
-        self._log_label = log_label
-        log = Gtk.TextView()
-        log.set_left_margin(5)
-        log.set_right_margin(5)
-        log.props.editable = False
-        log.set_visible(False)
-        log.set_no_show_all(True)
-        self._log = log
-        log_buffer = log.get_buffer()
-        log_scroll = Gtk.ScrolledWindow()
-        log_scroll.set_min_content_height(100)
-        log_scroll.set_max_content_height(300)
-        log_scroll.set_propagate_natural_height(True)
-        log_scroll.add(log)
+        self.log_label = Gtk.Label(label=_("Progress:"),
+                                   xalign=0.0, yalign=0.5, wrap=True,
+                                   visible=False, no_show_all=True)
+        self.log = Gtk.TextView(left_margin=5, right_margin=5, editable=False,
+                                visible=False, no_show_all=True)
+        log_buf = self.log.get_buffer()
+        log_scroll = Gtk.ScrolledWindow(min_content_height=100,
+                                        max_content_height=300,
+                                        propagate_natural_height=True)
+        log_scroll.add(self.log)
 
         def append(text):
             """ Print text to the output TextView window. """
-            GLib.idle_add(lambda: log_buffer.insert(log_buffer.get_end_iter(),
-                                                text + "\n"))
-            GLib.idle_add(lambda: log.scroll_to_mark(log_buffer.get_insert(),
-                                                     0.0, True, 0.5, 0.5))
+            GLib.idle_add(lambda: log_buf.insert(log_buf.get_end_iter(),
+                                                    text + "\n"))
+            GLib.idle_add(lambda: self.log.scroll_to_mark(log_buf.get_insert(),
+                                                          0.0, True, 0.5, 0.5))
 
         # Read saved searches from file
         queries = {}
@@ -87,10 +80,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                              self._config_key(query_name))
             check_button.set_active(self.config_get_bool(query_name))
             saved_search_vbox.pack_start(check_button, False, False, 0)
-        saved_search_scroll = Gtk.ScrolledWindow()
-        saved_search_scroll.set_min_content_height(0)
-        saved_search_scroll.set_max_content_height(300)
-        saved_search_scroll.set_propagate_natural_height(True)
+        saved_search_scroll = Gtk.ScrolledWindow(min_content_height=0,
+                                                 max_content_height=300,
+                                                 propagate_natural_height=True)
         saved_search_scroll.add(saved_search_vbox)
         frame = qltk.Frame(
             label=_("Synchronize the following saved searches:"),
@@ -181,31 +173,30 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         def start(button):
             """ Start the song synchronization """
             self.running = True
-            self._start_button.set_visible(False)
-            self._stop_button.set_visible(True)
-            self._log_label.set_visible(True)
-            self._log.set_visible(True)
+            self.start_button.set_visible(False)
+            self.stop_button.set_visible(True)
+            self.log_label.set_visible(True)
+            self.log.set_visible(True)
             synchronize()
-            self._start_button.set_visible(True)
-            self._stop_button.set_visible(False)
+            self.start_button.set_visible(True)
+            self.stop_button.set_visible(False)
 
         def stop(button):
             """ Stop the song synchronization """
             append("Stopping…")
             self.running = False
-            self._start_button.set_visible(True)
-            self._stop_button.set_visible(False)
+            self.start_button.set_visible(True)
+            self.stop_button.set_visible(False)
 
         def path_changed(entry):
             """ Save the destination path to the global config """
             config.set('plugins', self.config_path_key, entry.get_text())
 
         # Destination path entry field
-        destination_entry = Gtk.Entry()
-        destination_entry.set_placeholder_text(
-            _("e.g. the absolute path to your SD card"))
-        destination_entry.set_text(
-            config.get('plugins', self.config_path_key, ''))
+        destination_entry = Gtk.Entry(
+            placeholder_text=_("e.g. the absolute path to your SD card"),
+            text=config.get('plugins', self.config_path_key, '')
+        )
         destination_entry.connect('changed', path_changed)
 
         # Destination path hbox
@@ -244,7 +235,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                    icon_name=Icons.DOCUMENT_SAVE)
         start_button.connect('clicked', start)
         start_button.set_visible(True)
-        self._start_button = start_button
+        self.start_button = start_button
 
         # Stop button
         stop_button = qltk.Button(label=_("Stop synchronization"),
@@ -252,14 +243,18 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         stop_button.connect('clicked', stop)
         stop_button.set_visible(False)
         stop_button.set_no_show_all(True)
-        self._stop_button = stop_button
+        self.stop_button = stop_button
 
-        # Section for the action buttons and output window
+        # Section for the action buttons
         run_vbox = Gtk.VBox(spacing=self.spacing_large)
         run_vbox.pack_start(start_button, False, False, 0)
         run_vbox.pack_start(stop_button, False, False, 0)
-        run_vbox.pack_start(log_label, False, False, 0)
-        run_vbox.pack_start(log_scroll, False, False, 0)
         vbox.pack_start(run_vbox, False, False, 0)
+
+        # Section for the output window
+        output_vbox = Gtk.VBox(spacing=self.spacing_large)
+        output_vbox.pack_start(self.log_label, False, False, 0)
+        output_vbox.pack_start(log_scroll, False, False, 0)
+        vbox.pack_start(output_vbox, False, False, 0)
 
         return vbox
