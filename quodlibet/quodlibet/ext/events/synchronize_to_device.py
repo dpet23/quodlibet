@@ -42,21 +42,30 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         vbox = Gtk.VBox(spacing=self.spacing_main)
 
         # Define output window
+        log_label = Gtk.Label(label=_("Progress:"))
+        log_label.set_visible(False)
+        log_label.set_no_show_all(True)
+        self._log_label = log_label
         log = Gtk.TextView()
         log.set_left_margin(5)
         log.set_right_margin(5)
         log.props.editable = False
-        buffer = log.get_buffer()
-        scroll = Gtk.ScrolledWindow()
-        scroll.set_size_request(-1, 100)
-        scroll.add(log)
+        log.set_visible(False)
+        log.set_no_show_all(True)
+        self._log = log
+        log_buffer = log.get_buffer()
+        log_scroll = Gtk.ScrolledWindow()
+        log_scroll.set_min_content_height(100)
+        log_scroll.set_max_content_height(300)
+        log_scroll.set_propagate_natural_height(True)
+        log_scroll.add(log)
 
         def append(text):
             """ Print text to the output TextView window. """
-            GLib.idle_add(lambda: buffer.insert(buffer.get_end_iter(),
+            GLib.idle_add(lambda: log_buffer.insert(log_buffer.get_end_iter(),
                                                 text + "\n"))
-            GLib.idle_add(lambda: log.scroll_to_mark(buffer.get_insert(), 0.0,
-                                                     True, 0.5, 0.5))
+            GLib.idle_add(lambda: log.scroll_to_mark(log_buffer.get_insert(),
+                                                     0.0, True, 0.5, 0.5))
 
         # Read saved searches from file
         queries = {}
@@ -174,6 +183,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             self.running = True
             self._start_button.set_visible(False)
             self._stop_button.set_visible(True)
+            self._log_label.set_visible(True)
+            self._log.set_visible(True)
             synchronize()
             self._start_button.set_visible(True)
             self._stop_button.set_visible(False)
@@ -247,8 +258,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         run_vbox = Gtk.VBox(spacing=self.spacing_large)
         run_vbox.pack_start(start_button, False, False, 0)
         run_vbox.pack_start(stop_button, False, False, 0)
-        run_vbox.pack_start(Gtk.Label(label=_("Progress:")), False, False, 0)
-        run_vbox.pack_start(scroll, False, False, 0)
+        run_vbox.pack_start(log_label, False, False, 0)
+        run_vbox.pack_start(log_scroll, False, False, 0)
         vbox.pack_start(run_vbox, False, False, 0)
 
         return vbox
