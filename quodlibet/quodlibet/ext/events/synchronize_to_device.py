@@ -11,10 +11,13 @@ import string
 from pathlib import Path
 
 from gi.repository import Gtk, GLib
+from senf import fsn2text
 from quodlibet import _, app
 from quodlibet import config
 from quodlibet import get_user_dir
 from quodlibet import qltk
+from quodlibet import util
+from quodlibet.pattern import FileFromPattern
 from quodlibet.plugins import PluginConfigMixin
 from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
@@ -33,10 +36,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         "specified folder."
     )
     config_path_key = __name__ + '_path'
+    export_pattern_key = __name__ + '_pattern'
 
     spacing_main = 20
     spacing_large = 6
     spacing_small = 3
+
+    default_export_pattern = os.path.join("<artist>", "<album>", "<title>")
 
     def PluginPreferences(self, parent):
         vbox = Gtk.VBox(spacing=self.spacing_main)
@@ -105,11 +111,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     selected_songs.append(song)
 
             filename_list = []
-            destination = destination_entry.get_text()
-            if destination == '':
-                append(_("Destination path is empty, please provide it!"))
-                return
-
             try:
                 append(_("Starting synchronization…"))
                 for song in selected_songs:
@@ -121,36 +122,75 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     while Gtk.events_pending():
                         Gtk.main_iteration()
 
+                    # Get song details
                     song_path = song['~filename']
                     file_ext = song("~filename").split('.')[-1]
-                    song_file_name = filter_valid_chars(
-                        "{}.{}".format(song("title"), file_ext))
 
-                    folder = os.path.join(destination,
-                                          filter_valid_chars(song("artist")),
-                                          filter_valid_chars(song("album")))
-                    os.makedirs(folder, exist_ok=True)
-                    dest_file = os.path.join(folder, song_file_name)
-                    filename_list.append(dest_file)
+                    # Check text from destination path and export pattern
+                    destination_path = self.destination_entry.get_text()
+                    export_pattern = self.export_pattern_entry.get_text()
+                    if not destination_path:
+                        err_title = _('No destination path provided')
+                        qltk.ErrorMessage(
+                            vbox, err_title,
+                            _('Please specify the directory where songs should '
+                              'be exported.')).run()
+                        append(_("Synchronization failed: {}" \
+                                 .format(err_title)))
+                        return
+                    if not export_pattern:
+                        err_title = _('No export pattern provided')
+                        qltk.ErrorMessage(
+                            vbox, err_title,
+                            _('Please specify an export pattern for the names '
+                              'of the exported songs.')).run()
+                        append(_("Synchronization failed: {}" \
+                                 .format(err_title)))
+                        return
 
-                    # Skip existing files
-                    if os.path.exists(dest_file):
+                    # Combine destination path and export pattern to form
+                    # the full pattern
+                    full_export_path = os.path.join(destination_path,
+                                                    export_pattern)
+                    try:
+                        pattern = FileFromPattern(full_export_path)
+                    except ValueError:
+                        err_title = _('Export path is not absolute')
+                        qltk.ErrorMessage(
+                            vbox, err_title,
+                            _('The pattern\n\t<b>%s</b>\ncontains / but does '
+                              'not start from root. Please provide an absolute '
+                              'destination path by making sure it starts with '
+                              '/ or ~/.') % (
+                            util.escape(full_export_path))).run()
+                        append(_("Synchronization failed: {}" \
+                                 .format(err_title)))
+                        return
+
+                    # Get full path of new file
+                    new_name = fsn2text(pattern.format(song))
+                    filename_list.append(new_name)
+
+                    # Export, skipping existing files
+                    if os.path.exists(new_name):
                         append(_("Skipped '{}' because it already exists." \
-                                 .format(dest_file)))
+                                 .format(new_name)))
                     else:
-                        append(_("Writing '{}'…".format(dest_file)))
-                        copyfile(song_path, dest_file)
+                        append(_("Writing '{}'…".format(new_name)))
+                        song_folders = os.path.dirname(new_name)
+                        os.makedirs(song_folders, exist_ok=True)
+                        copyfile(song_path, new_name)
 
                 # Delete files from the destination directory
                 # which are not in the saved searches
-                for existing_file in Path(destination).rglob('*.' + file_ext):
+                for existing_file in Path(destination_path).rglob('*.' + file_ext):
                     if str(existing_file) not in filename_list:
                         append(_("Deleting '{}'…".format(existing_file)))
                         try:
                             os.remove(str(existing_file))
                         except IsADirectoryError:
                             pass
-                remove_empty_dirs(destination)
+                remove_empty_dirs(destination_path)
 
                 append(_("Synchronization finished."))
             except FileNotFoundError as e:
@@ -248,6 +288,22 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         destination_vbox.pack_start(destination_warn_label, False, False, 0)
         destination_vbox.pack_start(destination_info_label, False, False, 0)
         frame = qltk.Frame(label=_("Destination path:"), child=destination_vbox)
+        vbox.pack_start(frame, False, False, 0)
+
+        def export_pattern_changed(entry):
+            """ Save the export pattern to the global config """
+            config.set('plugins', self.export_pattern_key, entry.get_text())
+
+        # Export pattern frame
+        export_pattern_entry = Gtk.Entry(
+            placeholder_text=_('the structure of the exported filenames, based '
+                               'on their tags'),
+            text=config.get('plugins', self.export_pattern_key,
+                             self.default_export_pattern))
+        export_pattern_entry.connect('changed', export_pattern_changed)
+        self.export_pattern_entry = export_pattern_entry
+        frame = qltk.Frame(label=_("Export pattern:"),
+                           child=export_pattern_entry)
         vbox.pack_start(frame, False, False, 0)
 
         def start(button):
