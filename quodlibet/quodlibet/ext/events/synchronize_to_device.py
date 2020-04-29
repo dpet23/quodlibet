@@ -19,6 +19,7 @@ from quodlibet import qltk
 from quodlibet import util
 from quodlibet.pattern import FileFromPattern
 from quodlibet.plugins import PluginConfigMixin
+from quodlibet.plugins import PM
 from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
 from quodlibet.qltk.ccb import ConfigCheckButton
@@ -26,17 +27,22 @@ from quodlibet.query import Query
 
 from shutil import copyfile
 
+PLUGIN_CONFIG_SECTION = 'synchronize_to_device'
+
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ICON = Icons.NETWORK_TRANSMIT
-    PLUGIN_ID = "synchronize_to_device"
+    PLUGIN_ID = PLUGIN_CONFIG_SECTION
     PLUGIN_NAME = _("Synchronize to Device")
     PLUGIN_DESC = _(
         "Synchronizes all songs from the selected saved searches with the "
         "specified folder."
     )
-    config_path_key = __name__ + '_path'
-    export_pattern_key = __name__ + '_pattern'
+
+    CONFIG_SECTION = PLUGIN_CONFIG_SECTION
+    CONFIG_QUERY_PREFIX = 'query_'
+    CONFIG_PATH_KEY = '{}_{}'.format(PLUGIN_CONFIG_SECTION, 'path')
+    CONFIG_PATTERN_KEY = '{}_{}'.format(PLUGIN_CONFIG_SECTION, 'pattern')
 
     spacing_main = 20
     spacing_large = 6
@@ -82,9 +88,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         # Saved search selection frame
         saved_search_vbox = Gtk.VBox(spacing=self.spacing_large)
         for query_name, query in queries.items():
-            check_button = ConfigCheckButton(query_name, "plugins",
-                                             self._config_key(query_name))
-            check_button.set_active(self.config_get_bool(query_name))
+            query_config = self.CONFIG_QUERY_PREFIX + query_name
+            check_button = ConfigCheckButton(query_name, PM.CONFIG_SECTION,
+                                             self._config_key(query_config))
+            check_button.set_active(self.config_get_bool(query_config))
             saved_search_vbox.pack_start(check_button, False, False, 0)
         saved_search_scroll = Gtk.ScrolledWindow(min_content_height=0,
                                                  max_content_height=300,
@@ -102,7 +109,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             """
             enabled_queries = []
             for query_name, query in queries.items():
-                if self.config_get_bool(query_name):
+                query_config = self.CONFIG_QUERY_PREFIX + query_name
+                if self.config_get_bool(query_config):
                     enabled_queries.append(query)
 
             selected_songs = []
@@ -212,12 +220,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         def path_changed(entry):
             """ Save the destination path to the global config """
-            config.set('plugins', self.config_path_key, entry.get_text())
+            config.set(PM.CONFIG_SECTION, self.CONFIG_PATH_KEY,
+                       entry.get_text())
 
         # Destination path entry field
         destination_entry = Gtk.Entry(
             placeholder_text=_("e.g. the absolute path to your SD card"),
-            text=config.get('plugins', self.config_path_key, '')
+            text=config.get(PM.CONFIG_SECTION, self.CONFIG_PATH_KEY, '')
         )
         destination_entry.connect('changed', path_changed)
         self.destination_entry = destination_entry
@@ -292,13 +301,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         def export_pattern_changed(entry):
             """ Save the export pattern to the global config """
-            config.set('plugins', self.export_pattern_key, entry.get_text())
+            config.set(PM.CONFIG_SECTION, self.CONFIG_PATTERN_KEY,
+                       entry.get_text())
 
         # Export pattern frame
         export_pattern_entry = Gtk.Entry(
             placeholder_text=_('the structure of the exported filenames, based '
                                'on their tags'),
-            text=config.get('plugins', self.export_pattern_key,
+            text=config.get(PM.CONFIG_SECTION, self.CONFIG_PATTERN_KEY,
                              self.default_export_pattern))
         export_pattern_entry.connect('changed', export_pattern_changed)
         self.export_pattern_entry = export_pattern_entry
