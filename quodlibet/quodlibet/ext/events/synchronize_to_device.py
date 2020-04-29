@@ -22,6 +22,7 @@ from quodlibet.plugins import PluginConfigMixin
 from quodlibet.plugins import PM
 from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
+from quodlibet.qltk.cbes import ComboBoxEntrySave
 from quodlibet.qltk.ccb import ConfigCheckButton
 from quodlibet.query import Query
 
@@ -43,6 +44,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     CONFIG_QUERY_PREFIX = 'query_'
     CONFIG_PATH_KEY = '{}_{}'.format(PLUGIN_CONFIG_SECTION, 'path')
     CONFIG_PATTERN_KEY = '{}_{}'.format(PLUGIN_CONFIG_SECTION, 'pattern')
+
+    path_query = os.path.join(get_user_dir(), 'lists', 'queries.saved')
+    path_pattern = os.path.join(get_user_dir(), 'lists', 'renamepatterns')
 
     spacing_main = 20
     spacing_large = 6
@@ -74,8 +78,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Read saved searches from file
         queries = {}
-        query_path = os.path.join(get_user_dir(), 'lists', 'queries.saved')
-        with open(query_path, 'r', encoding="utf-8") as query_file:
+        with open(self.path_query, 'r', encoding='utf-8') as query_file:
             for query_string in query_file:
                 name = next(query_file).strip()
                 queries[name] = Query(query_string.strip())
@@ -305,15 +308,21 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                        entry.get_text())
 
         # Export pattern frame
-        export_pattern_entry = Gtk.Entry(
-            placeholder_text=_('the structure of the exported filenames, based '
-                               'on their tags'),
-            text=config.get(PM.CONFIG_SECTION, self.CONFIG_PATTERN_KEY,
-                             self.default_export_pattern))
+        export_pattern_combo = ComboBoxEntrySave(
+            self.path_pattern, [self.default_export_pattern],
+            title=_("Path Patterns"),
+            edit_title=_(u"Edit saved patterns…"))
+        export_pattern_combo.enable_clear_button()
+        export_pattern_combo.show_all()
+        export_pattern_entry = export_pattern_combo.get_child()
+        export_pattern_entry.set_placeholder_text(
+            _('the structure of the exported filenames, based on their tags'))
+        export_pattern_entry.set_text(config.get(PM.CONFIG_SECTION,
+            self.CONFIG_PATTERN_KEY, self.default_export_pattern))
         export_pattern_entry.connect('changed', export_pattern_changed)
         self.export_pattern_entry = export_pattern_entry
         frame = qltk.Frame(label=_("Export pattern:"),
-                           child=export_pattern_entry)
+                           child=export_pattern_combo)
         vbox.pack_start(frame, False, False, 0)
 
         def start(button):
