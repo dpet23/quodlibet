@@ -7,11 +7,12 @@
 # (at your option) any later version.
 
 import os
+import re
 import string
+import unicodedata
 from pathlib import Path
 
 from gi.repository import Gtk, GLib
-from senf import fsn2text
 from quodlibet import _, app
 from quodlibet import config
 from quodlibet import get_user_dir
@@ -53,6 +54,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     spacing_small = 3
 
     default_export_pattern = os.path.join("<artist>", "<album>", "<title>")
+    unsafe_filename_chars = re.compile(r'[<>:"/\\|?*\u00FF-\uFFFF]')
 
     def PluginPreferences(self, parent):
         vbox = Gtk.VBox(spacing=self.spacing_main)
@@ -105,6 +107,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             child=saved_search_scroll)
         vbox.pack_start(frame, False, False, 0)
 
+        def show_sync_error(title, message):
+            """ Show a popup error message during a synchronization error """
+            qltk.ErrorMessage(vbox, title, message).run()
+            append(_("Synchronization failed: {}" .format(title)))
+
         def synchronize():
             """
             Synchronize the songs from the selected saved searches
@@ -141,22 +148,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     destination_path = self.destination_entry.get_text()
                     export_pattern = self.export_pattern_entry.get_text()
                     if not destination_path:
-                        err_title = _('No destination path provided')
-                        qltk.ErrorMessage(
-                            vbox, err_title,
+                        show_sync_error(_('No destination path provided'),
                             _('Please specify the directory where songs should '
-                              'be exported.')).run()
-                        append(_("Synchronization failed: {}" \
-                                 .format(err_title)))
+                              'be exported.'))
                         return
                     if not export_pattern:
-                        err_title = _('No export pattern provided')
-                        qltk.ErrorMessage(
-                            vbox, err_title,
+                        show_sync_error(_('No export pattern provided'),
                             _('Please specify an export pattern for the names '
-                              'of the exported songs.')).run()
-                        append(_("Synchronization failed: {}" \
-                                 .format(err_title)))
+                              'of the exported songs.'))
                         return
 
                     # Combine destination path and export pattern to form
@@ -166,31 +165,38 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     try:
                         pattern = FileFromPattern(full_export_path)
                     except ValueError:
-                        err_title = _('Export path is not absolute')
-                        qltk.ErrorMessage(
-                            vbox, err_title,
-                            _('The pattern\n\t<b>%s</b>\ncontains / but does '
+                        show_sync_error(_('Export path is not absolute'),
+                            _('The pattern\n\n<b>%s</b>\n\ncontains / but does '
                               'not start from root. Please provide an absolute '
                               'destination path by making sure it starts with '
-                              '/ or ~/.') % (
-                            util.escape(full_export_path))).run()
-                        append(_("Synchronization failed: {}" \
-                                 .format(err_title)))
+                              '/ or ~/.') % (util.escape(full_export_path)))
                         return
 
                     # Get full path of new file
-                    new_name = fsn2text(pattern.format(song))
-                    filename_list.append(new_name)
+                    new_name = Path(pattern.format(song))
+                    try:
+                        relative_name = new_name.relative_to(destination_path)
+                    except ValueError as ex:
+                        show_sync_error(
+                            _('Mismatch between destination path and export '
+                              'pattern'),
+                            _('The export pattern starts with a path that '
+                              'differs from the destination path. Please '
+                              'correct the pattern.'))
+                        return
+                    safe_name = os.path.join(destination_path,
+                                             make_safe_name(relative_name))
+                    filename_list.append(safe_name)
 
                     # Export, skipping existing files
-                    if os.path.exists(new_name):
+                    if os.path.exists(safe_name):
                         append(_("Skipped '{}' because it already exists." \
-                                 .format(new_name)))
+                                 .format(safe_name)))
                     else:
-                        append(_("Writing '{}'…".format(new_name)))
-                        song_folders = os.path.dirname(new_name)
+                        append(_("Writing '{}'…".format(safe_name)))
+                        song_folders = os.path.dirname(safe_name)
                         os.makedirs(song_folders, exist_ok=True)
-                        copyfile(song_path, new_name)
+                        copyfile(song_path, safe_name)
 
                 # Delete files from the destination directory
                 # which are not in the saved searches
@@ -207,6 +213,26 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             except FileNotFoundError as e:
                 append(str(e))
 
+        def make_safe_name(input_path):
+            """
+            Make a file path safe by replacing unsafe characters.
+            """
+            # Remove diacritics (accents)
+            safe_filename = unicodedata.normalize('NFKD', str(input_path))
+            safe_filename = u''.join(
+                [c for c in safe_filename if not unicodedata.combining(c)])
+
+            # Replace unsafe chars in each path component
+            safe_parts = []
+            for i, component in enumerate(Path(safe_filename).parts):
+                if i > 0:
+                    component = self.unsafe_filename_chars.sub('_', component)
+                    component = re.sub('_{2,}', '_', component)
+                safe_parts.append(component)
+            safe_filename = os.path.join(*safe_parts)
+
+            return safe_filename
+
         def remove_empty_dirs(path):
             """ Delete all empty sub-directories from the given path """
             for root, dirnames, filenames in os.walk(path, topdown=False):
@@ -215,11 +241,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                         os.rmdir(os.path.realpath(os.path.join(root, dirname)))
                     except OSError:
                         pass
-
-        def filter_valid_chars(str):
-            """ Remove invalid FAT32 filename characters """
-            valid_chars = "-_.() %s%s" % (string.ascii_letters, string.digits)
-            return "".join(char for char in str if char in valid_chars)
 
         def path_changed(entry):
             """ Save the destination path to the global config """
