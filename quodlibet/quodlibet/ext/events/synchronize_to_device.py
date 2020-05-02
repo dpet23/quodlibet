@@ -13,6 +13,7 @@ import unicodedata
 from pathlib import Path
 
 from gi.repository import Gtk, GLib
+from senf import fsn2text
 from quodlibet import _, app
 from quodlibet import config
 from quodlibet import get_user_dir
@@ -25,11 +26,36 @@ from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
 from quodlibet.qltk.cbes import ComboBoxEntrySave
 from quodlibet.qltk.ccb import ConfigCheckButton
+from quodlibet.qltk.models import ObjectStore
+from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
 
 from shutil import copyfile
 
 PLUGIN_CONFIG_SECTION = 'synchronize_to_device'
+
+
+def expandible_scroll(min_height=0, max_height=300):
+    """ Create a ScrolledWindow that expands as content is added """
+    return Gtk.ScrolledWindow(min_content_height=min_height,
+                              max_content_height=max_height,
+                              propagate_natural_height=True)
+
+
+class Entry():
+    """ This class defines an entry in the tree of previewed export paths """
+
+    def __init__(self, song):
+        self.song = song
+        self.export_path = None
+
+    @property
+    def basename(self):
+        return fsn2text(self.song("~basename"))
+
+    @property
+    def filename(self):
+        return fsn2text(self.song("~filename"))
 
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
@@ -66,9 +92,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         self.log = Gtk.TextView(left_margin=5, right_margin=5, editable=False,
                                 visible=False, no_show_all=True)
         log_buf = self.log.get_buffer()
-        log_scroll = Gtk.ScrolledWindow(min_content_height=100,
-                                        max_content_height=300,
-                                        propagate_natural_height=True)
+        log_scroll = expandible_scroll(min_height=100)
         log_scroll.add(self.log)
 
         def append(text):
@@ -98,9 +122,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                              self._config_key(query_config))
             check_button.set_active(self.config_get_bool(query_config))
             saved_search_vbox.pack_start(check_button, False, False, 0)
-        saved_search_scroll = Gtk.ScrolledWindow(min_content_height=0,
-                                                 max_content_height=300,
-                                                 propagate_natural_height=True)
+        saved_search_scroll = expandible_scroll()
         saved_search_scroll.add(saved_search_vbox)
         frame = qltk.Frame(
             label=_("Synchronize the following saved searches:"),
@@ -110,12 +132,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         def show_sync_error(title, message):
             """ Show a popup error message during a synchronization error """
             qltk.ErrorMessage(vbox, title, message).run()
-            append(_("Synchronization failed: {}" .format(title)))
 
-        def synchronize():
+        def get_songs_from_queries():
             """
-            Synchronize the songs from the selected saved searches
-            with the specified folder
+            Build a list of songs to be synchronized, filtered using the
+            selected saved searches
             """
             enabled_queries = []
             for query_name, query in queries.items():
@@ -128,90 +149,29 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 if any(query.search(song) for query in enabled_queries):
                     selected_songs.append(song)
 
-            filename_list = []
+            return selected_songs
+
+        def get_export_path(song, destination_path, export_pattern):
+            """
+            Use the given pattern of song tags to build the destination path
+            for a song
+            """
+            new_name = Path(export_pattern.format(song))
+            expanded_destination = os.path.expanduser(destination_path)
+
             try:
-                append(_("Starting synchronization…"))
-                for song in selected_songs:
-                    if not self.running:
-                        append(_("Stopped the synchronization."))
-                        return
+                relative_name = new_name.relative_to(expanded_destination)
+            except ValueError as ex:
+                show_sync_error(
+                    _('Mismatch between destination path and export '
+                      'pattern'),
+                    _('The export pattern starts with a path that '
+                      'differs from the destination path. Please '
+                      'correct the pattern.\n\nError:\n{}').format(ex))
+                return None
 
-                    # Prevent the application from becoming unreponsive
-                    while Gtk.events_pending():
-                        Gtk.main_iteration()
-
-                    # Get song details
-                    song_path = song['~filename']
-                    file_ext = song("~filename").split('.')[-1]
-
-                    # Check text from destination path and export pattern
-                    destination_path = self.destination_entry.get_text()
-                    export_pattern = self.export_pattern_entry.get_text()
-                    if not destination_path:
-                        show_sync_error(_('No destination path provided'),
-                            _('Please specify the directory where songs should '
-                              'be exported.'))
-                        return
-                    if not export_pattern:
-                        show_sync_error(_('No export pattern provided'),
-                            _('Please specify an export pattern for the names '
-                              'of the exported songs.'))
-                        return
-
-                    # Combine destination path and export pattern to form
-                    # the full pattern
-                    full_export_path = os.path.join(destination_path,
-                                                    export_pattern)
-                    try:
-                        pattern = FileFromPattern(full_export_path)
-                    except ValueError:
-                        show_sync_error(_('Export path is not absolute'),
-                            _('The pattern\n\n<b>%s</b>\n\ncontains / but does '
-                              'not start from root. Please provide an absolute '
-                              'destination path by making sure it starts with '
-                              '/ or ~/.') % (util.escape(full_export_path)))
-                        return
-
-                    # Get full path of new file
-                    new_name = Path(pattern.format(song))
-                    try:
-                        relative_name = new_name.relative_to(destination_path)
-                    except ValueError as ex:
-                        show_sync_error(
-                            _('Mismatch between destination path and export '
-                              'pattern'),
-                            _('The export pattern starts with a path that '
-                              'differs from the destination path. Please '
-                              'correct the pattern.'))
-                        return
-                    safe_name = os.path.join(destination_path,
-                                             make_safe_name(relative_name))
-                    filename_list.append(safe_name)
-
-                    # Export, skipping existing files
-                    if os.path.exists(safe_name):
-                        append(_("Skipped '{}' because it already exists." \
-                                 .format(safe_name)))
-                    else:
-                        append(_("Writing '{}'…".format(safe_name)))
-                        song_folders = os.path.dirname(safe_name)
-                        os.makedirs(song_folders, exist_ok=True)
-                        copyfile(song_path, safe_name)
-
-                # Delete files from the destination directory
-                # which are not in the saved searches
-                for existing_file in Path(destination_path).rglob('*.' + file_ext):
-                    if str(existing_file) not in filename_list:
-                        append(_("Deleting '{}'…".format(existing_file)))
-                        try:
-                            os.remove(str(existing_file))
-                        except IsADirectoryError:
-                            pass
-                remove_empty_dirs(destination_path)
-
-                append(_("Synchronization finished."))
-            except FileNotFoundError as e:
-                append(str(e))
+            return os.path.join(destination_path,
+                                make_safe_name(relative_name))
 
         def make_safe_name(input_path):
             """
@@ -346,6 +306,190 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                            child=export_pattern_combo)
         vbox.pack_start(frame, False, False, 0)
 
+        skip_tag = '[SKIP]'
+        skip_display = skip_tag + ' Filename already exists ({})'
+
+        def run_preview(button):
+            """ Show the export paths for all songs to be synchronized """
+            self.preview_button.set_visible(False)
+            self.preview_stop_button.set_visible(True)
+            self.running = True
+
+            # Get text from the destination path entry
+            destination_path = self.destination_entry.get_text()
+            if not destination_path:
+                show_sync_error(_('No destination path provided'),
+                    _('Please specify the directory where songs should '
+                        'be exported.'))
+                return
+
+            # Get text from the export pattern entry
+            export_pattern = self.export_pattern_entry.get_text()
+            if not export_pattern:
+                show_sync_error(_('No export pattern provided'),
+                    _('Please specify an export pattern for the names '
+                        'of the exported songs.'))
+                return
+
+            # Combine destination path and export pattern to form
+            # the full pattern
+            full_export_path = os.path.join(destination_path,
+                                            export_pattern)
+            try:
+                pattern = FileFromPattern(full_export_path)
+            except ValueError:
+                show_sync_error(_('Export path is not absolute'),
+                    _('The pattern\n\n<b>%s</b>\n\ncontains / but does '
+                        'not start from root. Please provide an absolute '
+                        'destination path by making sure it starts with '
+                        '/ or ~/.') % (util.escape(full_export_path)))
+                return
+
+            # Get a list containing all songs to export
+            songs = get_songs_from_queries()
+            export_paths = []
+
+            model = self.preview_tree.get_model()
+            model.clear()
+            for song in songs:
+                if not self.running:
+                    # append(_("Stopped the synchronization."))
+                    return
+
+                # Prevent the application from becoming unreponsive
+                while Gtk.events_pending():
+                    Gtk.main_iteration()
+
+                export_path = get_export_path(song, destination_path, pattern)
+                if not export_path:
+                    break
+                if export_path in export_paths:
+                    export_path = skip_display.format(export_path)
+
+                entry = Entry(song)
+                entry.export_path = export_path
+                export_paths.append(export_path)
+                model.append(row=[entry])
+
+            stop_preview(self.preview_stop_button)
+            start_button.set_sensitive(True)
+
+        def stop_preview(button):
+            """ Stop the generation export paths """
+            self.running = False
+            self.preview_button.set_visible(True)
+            self.preview_stop_button.set_visible(False)
+
+        # Start preview button
+        preview_button = qltk.Button(label=_('Preview'),
+                                     icon_name=Icons.VIEW_REFRESH)
+        preview_button.set_visible(True)
+        preview_button.connect('clicked', run_preview)
+        self.preview_button = preview_button
+
+        # Stop preview button
+        preview_stop_button = qltk.Button(label=_("Stop preview"),
+                                          icon_name=Icons.PROCESS_STOP)
+        preview_stop_button.connect('clicked', stop_preview)
+        preview_stop_button.set_visible(False)
+        preview_stop_button.set_no_show_all(True)
+        self.preview_stop_button = preview_stop_button
+
+        # Preview details
+        model = ObjectStore()
+        preview_tree = Gtk.TreeView(model=model)
+        self.preview_tree = preview_tree
+        preview_scroll = expandible_scroll(min_height=50)
+        preview_scroll.add(preview_tree)
+
+        def cell_data_basename(column, cell, model, iter_, data):
+            """
+            Handle entering data into the "File" column
+            of the export path previews
+            """
+            entry = model.get_value(iter_)
+            cell.set_property('text', entry.basename)
+
+        def cell_data_export_path(column, cell, model, iter_, data):
+            """
+            Handle entering data into the "Export Path" column
+            of the export path previews
+            """
+            entry = model.get_value(iter_)
+            cell.set_property('text', entry.export_path)
+
+        def previewed_paths():
+            """
+            Build a list of all current export paths for the songs to be
+            synchronized
+            """
+            model = self.preview_tree.get_model()
+            return [entry.export_path for entry in model.values()]
+
+        def row_edited(renderer, path, new):
+            """ Handle a manual edit of a previewed export path """
+            path = Gtk.TreePath.new_from_string(path)
+            model = self.preview_tree.get_model()
+            entry = model[path][0]
+            if entry.export_path != new:
+                if new in previewed_paths():
+                    new = skip_display.format(new)
+                entry.export_path = new
+                model.path_changed(path)
+
+        render = Gtk.CellRendererText()
+        column = TreeViewColumn(title=_('File'))
+        column.pack_start(render, True)
+        column.set_cell_data_func(render, cell_data_basename)
+        column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        preview_tree.append_column(column)
+
+        render = Gtk.CellRendererText()
+        render.set_property('editable', True)
+        render.connect('edited', row_edited)
+        column = TreeViewColumn(title=_('Export Path'))
+        column.pack_start(render, True)
+        column.set_cell_data_func(render, cell_data_export_path)
+        column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        preview_tree.append_column(column)
+
+        # Section for previewing exported files
+        preview_vbox = Gtk.VBox(spacing=self.spacing_large)
+        preview_vbox.pack_start(preview_button, False, False, 0)
+        preview_vbox.pack_start(preview_stop_button, False, False, 0)
+        preview_vbox.pack_start(preview_scroll, False, False, 0)
+        vbox.pack_start(preview_vbox, False, False, 0)
+
+        def synchronize():
+            """
+            Synchronize the songs from the selected saved searches
+            with the specified folder
+            """
+            model = self.preview_tree.get_model()
+            for entry in model.values():
+                if not self.running:
+                    append(_("Stopped the synchronization."))
+                    return
+
+                # Prevent the application from becoming unreponsive
+                while Gtk.events_pending():
+                    Gtk.main_iteration()
+
+                if entry.export_path is None or skip_tag in entry.export_path:
+                    append(entry.export_path)
+                    continue  # to next entry
+
+                # Export, skipping existing files
+                expanded_path = os.path.expanduser(entry.export_path)
+                if os.path.exists(expanded_path):
+                    append(_("Skipped '{}' because it already exists." \
+                             .format(expanded_path)))
+                else:
+                    append(_("Writing '{}'…".format(entry.export_path)))
+                    song_folders = os.path.dirname(expanded_path)
+                    os.makedirs(song_folders, exist_ok=True)
+                    copyfile(entry.filename, expanded_path)
+
         def start(button):
             """ Start the song synchronization """
             self.running = True
@@ -364,14 +508,15 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             self.start_button.set_visible(True)
             self.stop_button.set_visible(False)
 
-        # Start button
+        # Start sync button
         start_button = qltk.Button(label=_("Start synchronization"),
                                    icon_name=Icons.DOCUMENT_SAVE)
         start_button.connect('clicked', start)
+        start_button.set_sensitive(False)
         start_button.set_visible(True)
         self.start_button = start_button
 
-        # Stop button
+        # Stop sync button
         stop_button = qltk.Button(label=_("Stop synchronization"),
                                   icon_name=Icons.PROCESS_STOP)
         stop_button.connect('clicked', stop)
