@@ -12,7 +12,7 @@ import unicodedata
 from pathlib import Path
 from shutil import copyfile
 
-from gi.repository import Gtk, GLib
+from gi.repository import Gtk, GLib, Pango
 from senf import fsn2text
 
 from quodlibet import _
@@ -26,6 +26,7 @@ from quodlibet.plugins import PM
 from quodlibet.plugins import PluginConfigMixin
 from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
+from quodlibet.qltk import Window
 from quodlibet.qltk.cbes import ComboBoxEntrySave
 from quodlibet.qltk.ccb import ConfigCheckButton
 from quodlibet.qltk.models import ObjectStore
@@ -73,6 +74,84 @@ class Tags:
     Various tags that will be used to show sync issues.
     """
     SKIP = '[SKIP]'
+
+
+class SyncLog:
+    """
+    Store and show the current synchronization log in a new window.
+    """
+    _WIDTH = 600
+    _HEIGHT = 300
+
+    def __init__(self, title):
+        self._title = title
+        self._log = []
+
+        self._create_window()
+
+    def _create_window(self):
+        """
+        Create a new window to show the current log messages.
+        """
+        # Create the window
+        self._window = Window()
+        self._window.hide()
+        self._window.connect("delete-event", self._on_delete_event)
+        self._window.set_title(self._title)
+        self._window.set_default_size(self._WIDTH, self._HEIGHT)
+
+        # Create log text view
+        view = Gtk.TextView(left_margin=5, right_margin=5, editable=False)
+        view.modify_font(Pango.font_description_from_string('Monospace'))
+        self.view = view
+        self.buffer = view.get_buffer()
+        log_scroll = Gtk.ScrolledWindow()
+        log_scroll.add(view)
+        self._window.add(log_scroll)
+
+        # Show any pre-existing log entries
+        for entry in self._log:
+            self._show_log(entry)
+
+    def show_window(self, button=None):
+        """
+        Show the window.
+
+        :param button: The widget that called this function.
+        """
+        self._window.show_all()
+
+    def _on_delete_event(self, widget, event):
+        """
+        When closing the window, hide it instead of destroying it.
+
+        :param widget: The object which received the signal to close the window.
+        :param event:  The event which triggered this signal.
+        :return: True to stop other handlers from closing the window;
+                 False to propagate the event and allow the window to be closed.
+        """
+        self._window.hide()
+        return True
+
+    def _show_log(self, text):
+        """
+        Add a log entry to the text view.
+
+        :param text: The text to add.
+        """
+        GLib.idle_add(lambda: self.buffer.insert(self.buffer.get_end_iter(),
+                                                  text + '\n'))
+        GLib.idle_add(lambda: self.view.scroll_to_mark(self.buffer.get_insert(),
+                                                       0.0, True, 0.5, 0.5))
+
+    def print_log(self, text):
+        """
+        Print text to the output TextView window.
+
+        :param text: The text to add.
+        """
+        self._log.append(text)
+        self._show_log(text)
 
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
@@ -250,19 +329,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         sync_vbox.pack_start(sync_stop_button, False, False, 0)
         main_vbox.pack_start(sync_vbox, False, False, 0)
 
-        # Define output log window
-        self.log_label = Gtk.Label(label=_('Progress:'),
-                                   xalign=0.0, yalign=0.5, wrap=True,
-                                   visible=False, no_show_all=True)
-        self.log = Gtk.TextView(left_margin=5, right_margin=5, editable=False,
-                                visible=False, no_show_all=True)
-        self.log_buf = self.log.get_buffer()
-        log_scroll = _expandable_scroll(min_height=100)
-        log_scroll.add(self.log)
-        output_vbox = Gtk.VBox(spacing=self.spacing_large)
-        output_vbox.pack_start(self.log_label, False, False, 0)
-        output_vbox.pack_start(log_scroll, False, False, 0)
-        main_vbox.pack_start(output_vbox, False, False, 0)
+        # Open log button
+        self.log = SyncLog(self.PLUGIN_NAME + ': Log')
+        open_log_button = qltk.Button(label=_('Open log window'),
+                                      icon_name=Icons.EDIT)
+        open_log_button.connect('clicked', self.log.show_window)
+        main_vbox.pack_end(open_log_button, False, False, 0)
 
         return main_vbox
 
@@ -282,17 +354,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         hbox.pack_start(label, True, True, 0)
 
         return hbox
-
-    def _print_log(self, text):
-        """
-        Print text to the output TextView window.
-
-        :param text: The text to add to the TextView.
-        """
-        GLib.idle_add(lambda: self.log_buf.insert(self.log_buf.get_end_iter(),
-                                                  text + '\n'))
-        GLib.idle_add(lambda: self.log.scroll_to_mark(self.log_buf.get_insert(),
-                                                      0.0, True, 0.5, 0.5))
 
     def _destination_path_changed(self, entry):
         """
@@ -393,7 +454,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
     def _show_sync_error(self, title, message):
         qltk.ErrorMessage(self.main_vbox, title, message).run()
-        self._print_log(_('Synchronization failed: {}').format(title))
+        self.log.print_log(_('Synchronization failed: {}').format(title))
 
     @staticmethod
     def _run_pending_events():
@@ -409,7 +470,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The start preview button.
         """
-        self._print_log('Starting synchronization preview.')
+        self.log.print_log('Starting synchronization preview.')
         self.running = True
 
         # Change button visibility
@@ -423,7 +484,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             return
 
         self.sync_start_button.set_sensitive(True)
-        self._print_log('Finished synchronization preview.')
+        self.log.print_log('Finished synchronization preview.')
 
     def _stop_preview(self, button):
         """
@@ -432,7 +493,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param button: The stop preview button.
         """
         if button is not None:
-            self._print_log('Stopping synchronization preview.')
+            self.log.print_log('Stopping synchronization preview.')
         self.running = False
 
         # Change button visibility
@@ -457,7 +518,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         for song in songs:
             if not self.running:
-                self._print_log('Stopped synchronization preview.')
+                self.log.print_log('Stopped synchronization preview.')
                 return False
             self._run_pending_events()
 
@@ -597,22 +658,18 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The start sync button.
         """
-        self._print_log('Starting song synchronization.')
+        self.log.print_log('Starting song synchronization.')
         self.running = True
 
         # Change button visibility
         self.sync_start_button.set_visible(False)
         self.sync_stop_button.set_visible(True)
 
-        # Change log visibility
-        self.log_label.set_visible(True)
-        self.log.set_visible(True)
-
         if not self._run_sync():
             return
 
         self._stop_sync(None)
-        self._print_log('Finished song synchronization.')
+        self.log.print_log('Finished song synchronization.')
 
     def _stop_sync(self, button):
         """
@@ -621,7 +678,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param button: The stop sync button.
         """
         if button is not None:
-            self._print_log('Stopping song synchronization.')
+            self.log.print_log('Stopping song synchronization.')
         self.running = False
 
         # Change button visibility
@@ -637,24 +694,24 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         for entry in self.preview_model.values():
             if not self.running:
-                self._print_log('Stopped song synchronization.')
+                self.log.print_log('Stopped song synchronization.')
                 return False
             self._run_pending_events()
 
             if entry.export_path is None:
-                self._print_log(self.skip_none_text.format(entry.basename))
+                self.log.print_log(self.skip_none_text.format(entry.basename))
                 continue  # to next entry
             elif Tags.SKIP in entry.export_path:
-                self._print_log(entry.export_path)
+                self.log.print_log(entry.export_path)
                 continue  # to next entry
 
             # Export, skipping existing files
             expanded_path = os.path.expanduser(entry.export_path)
             if os.path.exists(expanded_path):
-                self._print_log(_('Skipped "{}" because it already exists.')
-                                .format(expanded_path))
+                self.log.print_log(_('Skipped - already exists: "{}"')
+                                   .format(expanded_path))
             else:
-                self._print_log(_('Writing "{}".').format(entry.export_path))
+                self.log.print_log(_('Writing "{}"').format(entry.export_path))
                 song_folders = os.path.dirname(expanded_path)
                 os.makedirs(song_folders, exist_ok=True)
                 copyfile(entry.filename, expanded_path)
