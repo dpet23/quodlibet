@@ -9,6 +9,7 @@
 import os
 import re
 import unicodedata
+from math import floor, log10
 from pathlib import Path
 from shutil import copyfile
 
@@ -300,11 +301,22 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         column.pack_start(render, True)
         preview_tree.append_column(column)
 
+        # Preview summary labels
+        self.prvw_summary_label = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
+                                            visible=False, no_show_all=True)
+        self.prvw_info_label = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
+                                         visible=False, no_show_all=True,
+                                         label=_('The export paths above can '
+                                                 'be edited before starting '
+                                                 'the synchronization.'))
+
         # Section for previewing exported files
         preview_vbox = Gtk.VBox(spacing=self.spacing_large)
         preview_vbox.pack_start(preview_start_button, False, False, 0)
         preview_vbox.pack_start(preview_stop_button, False, False, 0)
         preview_vbox.pack_start(preview_scroll, False, False, 0)
+        preview_vbox.pack_start(self.prvw_summary_label, False, False, 0)
+        preview_vbox.pack_start(self.prvw_info_label, False, False, 0)
         main_vbox.pack_start(preview_vbox, False, False, 0)
 
         # Start sync button
@@ -449,6 +461,18 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if entry.export_path != new_text:
             if new_text in self._get_previewed_paths():
                 new_text = self.skip_duplicate_text.format(new_text)
+
+            if Tags.SKIP in entry.export_path and Tags.SKIP not in new_text:
+                # The path of a skipped song was changed to be unique
+                self.songs_to_write += 1
+                self.songs_to_skip -= 1
+                self._update_preview_summary()
+            elif Tags.SKIP not in entry.export_path and Tags.SKIP in new_text:
+                # The path of a unique song was changed to be skipped
+                self.songs_to_write -= 1
+                self.songs_to_skip += 1
+                self._update_preview_summary()
+
             entry.export_path = new_text
             self.preview_model.path_changed(path)
 
@@ -512,6 +536,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Get a list containing all songs to export
         songs = self._get_songs_from_queries()
+        self.songs_to_write = self.songs_to_skip = 0
         export_paths = []
 
         self.preview_model.clear()
@@ -525,15 +550,49 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             export_path = self._get_export_path(song, destination_path, pattern)
             if not export_path:
                 return False
+
             if export_path in export_paths:
                 export_path = self.skip_duplicate_text.format(export_path)
+                self.songs_to_skip += 1
+            else:
+                self.songs_to_write += 1
 
             entry = Entry(song)
             entry.export_path = export_path
             export_paths.append(export_path)
             self.preview_model.append(row=[entry])
 
+        self._update_preview_summary()
         return True
+
+    def _update_preview_summary(self):
+        """
+        Update the preview summary text field.
+        """
+        preview_summary_prefix = _('Synchronization will:  ')
+        preview_summary = []
+
+        def _make_plural(num_files):
+            """
+            Make the word "file" plural if necessary
+            """
+            file_text = 'file' if num_files == 1 else 'files'
+            return '{} {}'.format(num_files, file_text)
+
+        if self.songs_to_write > 0:
+            preview_summary.append(
+                _('write {}').format(_make_plural(self.songs_to_write)))
+
+        if self.songs_to_skip > 0:
+            preview_summary.append(
+                _('skip {}').format(_make_plural(self.songs_to_skip)))
+
+        preview_summary_text = ',  '.join(preview_summary)
+        preview_summary_text = preview_summary_prefix + preview_summary_text
+        self.prvw_summary_label.set_label(preview_summary_text)
+        self.prvw_summary_label.set_visible(True)
+        self.prvw_info_label.set_visible(True)
+        self.log.print_log(preview_summary_text)
 
     def _get_previewed_paths(self):
         """
@@ -692,28 +751,64 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :return: Whether the synchronization was successful.
         """
+        counter_written = counter_skipped = 1
+
+        counter_len = max(self._get_count_digits(self.songs_to_write),
+                          self._get_count_digits(self.songs_to_skip))
+        counter_format = '{:0' + str(counter_len) + 'd}'
+        counter_template = _('{0}/{0}: ').format(counter_format)
+
         for entry in self.preview_model.values():
             if not self.running:
                 self.log.print_log('Stopped song synchronization.')
                 return False
             self._run_pending_events()
 
+            counter_prefix = counter_template.format(counter_skipped,
+                                                     self.songs_to_skip)
             if entry.export_path is None:
-                self.log.print_log(self.skip_none_text.format(entry.basename))
+                self.log.print_log(
+                    counter_prefix + self.skip_none_text.format(entry.basename))
+                counter_skipped += 1
                 continue  # to next entry
             elif Tags.SKIP in entry.export_path:
-                self.log.print_log(entry.export_path)
+                self.log.print_log(counter_prefix + entry.export_path)
+                counter_skipped += 1
                 continue  # to next entry
+            else:
+                counter_prefix = counter_template.format(counter_written,
+                                                         self.songs_to_write)
 
             # Export, skipping existing files
             expanded_path = os.path.expanduser(entry.export_path)
             if os.path.exists(expanded_path):
-                self.log.print_log(_('Skipped - already exists: "{}"')
-                                   .format(expanded_path))
+                self.log.print_log(_('{}Skipped - already exists: {}')
+                                   .format(counter_prefix, entry.export_path))
             else:
-                self.log.print_log(_('Writing "{}"').format(entry.export_path))
+                self.log.print_log(_('{}Writing: {}')
+                                   .format(counter_prefix, entry.export_path))
                 song_folders = os.path.dirname(expanded_path)
                 os.makedirs(song_folders, exist_ok=True)
                 copyfile(entry.filename, expanded_path)
+            counter_written += 1
 
         return True
+
+    def _get_count_digits(self, number):
+        """
+        Get the number of digits in an integer.
+
+        :param number: The number.
+        """
+        # Handle zero
+        if number == 0:
+            return 1
+
+        # Handle negative numbers
+        number = abs(number)
+
+        if number <= 999999999999997:
+            return floor(log10(number)) + 1
+
+        # Avoid floating-point errors for large numbers
+        return len(str(number))
