@@ -57,24 +57,67 @@ class Entry:
     An entry in the tree of previewed export paths.
     """
 
-    def __init__(self, song):
-        self.song = song
-        self.export_path = None
+    class Tags:
+        """
+        Various tags that will be used in the output.
+        """
+        tag_start = '<'
+        tag_end = '>'
+
+        BLANK = ''
+        DUPLICATE = tag_start + 'DUPLICATE' + tag_end
+
+        STATUS_EXISTS = 'Skip existing file'
+        STATUS_COPY = 'Writing'
+
+    def __init__(self, song, export_path=None):
+        self._song = song
+        self._export_path = ''
+        self._export_display = ''
+        self._tag = self.Tags.BLANK
+
+        if export_path:
+            self._set_export_path(export_path)
 
     @property
     def basename(self):
-        return fsn2text(self.song('~basename'))
+        return fsn2text(self._song('~basename'))
 
     @property
     def filename(self):
-        return fsn2text(self.song('~filename'))
+        return fsn2text(self._song('~filename'))
 
+    def set_duplicate_tag(self):
+        self._tag = self.Tags.DUPLICATE
+        self._set_export_display()
 
-class Tags:
-    """
-    Various tags that will be used to show sync issues.
-    """
-    SKIP = '[SKIP]'
+    def remove_tag(self):
+        self._tag = self.Tags.BLANK
+        self._set_export_display()
+
+    def _get_tag(self):
+        return self._tag
+
+    def _set_export_path(self, path):
+        self._export_path = path
+        self._set_export_display()
+
+    def _get_export_path(self):
+        return self._export_path
+
+    def _set_export_display(self):
+        if self._export_path == '' or self._tag == self.Tags.BLANK:
+            space = ''
+        else:
+            space = ' '
+        self._export_display = self._tag + space + self._export_path
+
+    def _get_export_display(self):
+        return self._export_display
+
+    export_path = property(_get_export_path, _set_export_path)
+    export_display = property(_get_export_display)
+    tag = property(_get_tag)
 
 
 class SyncLog:
@@ -177,9 +220,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     default_export_pattern = os.path.join('<artist>', '<album>', '<title>')
     unsafe_filename_chars = re.compile(r'[<>:"/\\|?*\u00FF-\uFFFF]')
 
-    skip_duplicate_text = Tags.SKIP + ' Filename exists: {}'
-    skip_none_text = Tags.SKIP + ' No export path for {}'
-
     def PluginPreferences(self, parent):
         # Read saved searches from file
         self.queries = {}
@@ -279,7 +319,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Preview details view
         preview_tree = Gtk.TreeView(model=ObjectStore())
-        preview_scroll = _expandable_scroll(min_height=50)
+        preview_scroll = _expandable_scroll(min_height=50, max_height=500)
         preview_scroll.add(preview_tree)
         self.preview_model = preview_tree.get_model()
 
@@ -446,7 +486,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param data:   The user data.
         """
         entry = model.get_value(iter_)
-        cell.set_property('text', entry.export_path)
+        cell.set_property('text', entry.export_display)
 
     def _row_edited(self, renderer, path, new_text):
         """
@@ -454,31 +494,60 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param renderer: The object which received the signal.
         :param path:     The path identifying the edited cell.
-        :param new_text: The new text.
+        :param new_text: The new text entered by the user.
         """
+
+        def _make_duplicate(entry):
+            entry.set_duplicate_tag()
+            self.c_songs_copy -= 1
+            self.c_song_dupes += 1
+            self._update_preview_summary()
+
+        def _make_unique(entry):
+            entry.remove_tag()
+            self.c_songs_copy += 1
+            self.c_song_dupes -= 1
+            self._update_preview_summary()
+
         path = Gtk.TreePath.new_from_string(path)
         entry = self.preview_model[path][0]
-        if entry.export_path != new_text:
-            if new_text in self._get_previewed_paths():
-                new_text = self.skip_duplicate_text.format(new_text)
+        if entry.export_display != new_text:
+            mark_other_duplicates = True
 
-            if Tags.SKIP in entry.export_path and Tags.SKIP not in new_text:
-                # The path of a skipped song was changed to be unique
-                self.songs_to_write += 1
-                self.songs_to_skip -= 1
-                self._update_preview_summary()
-            elif Tags.SKIP not in entry.export_path and Tags.SKIP in new_text:
-                # The path of a unique song was changed to be skipped
-                self.songs_to_write -= 1
-                self.songs_to_skip += 1
-                self._update_preview_summary()
+            new_path = new_text.split(Entry.Tags.tag_end)[-1].strip()
+            new_path_is_duplicate = new_path in self._get_previewed_paths()
+            old_path_is_duplicate = entry.tag == Entry.Tags.DUPLICATE
 
-            entry.export_path = new_text
-            self.preview_model.path_changed(path)
+            # Update this entry
+            if not old_path_is_duplicate and new_path_is_duplicate:
+                _make_duplicate(entry)
+                mark_other_duplicates = False
+            elif old_path_is_duplicate and not new_path_is_duplicate:
+                _make_unique(entry)
+            entry.export_path = new_path
 
-    def _show_sync_error(self, title, message):
-        qltk.ErrorMessage(self.main_vbox, title, message).run()
-        self.log.print_log(_('Synchronization failed: {}').format(title))
+            # Update any other entries in the preview table that are affected by
+            # the text change
+            counter = 0
+            for model_entry in self.preview_model.values():
+                if model_entry is entry:
+                    continue
+                elif model_entry.export_path == new_path \
+                        and model_entry.tag == Entry.Tags.BLANK \
+                        and mark_other_duplicates:
+                    _make_duplicate(model_entry)
+                    counter += 1
+                elif model_entry.tag == Entry.Tags.DUPLICATE \
+                        and model_entry.export_path != new_path:
+                    _make_unique(model_entry)
+                    counter += 1
+
+            log_suffix = ''
+            if counter != 0:
+                log_suffix = _(' This also affected {} other {}.')\
+                             .format(counter, self._make_plural_file(counter))
+            self.log.print_log(_('Entry path changed successfully.{}')\
+                               .format(log_suffix))
 
     @staticmethod
     def _run_pending_events():
@@ -536,9 +605,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Get a list containing all songs to export
         songs = self._get_songs_from_queries()
-        self.songs_to_write = self.songs_to_skip = 0
+        self.c_songs_copy = self.c_song_dupes = 0
         export_paths = []
-
         self.preview_model.clear()
 
         for song in songs:
@@ -551,19 +619,25 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if not export_path:
                 return False
 
-            if export_path in export_paths:
-                export_path = self.skip_duplicate_text.format(export_path)
-                self.songs_to_skip += 1
-            else:
-                self.songs_to_write += 1
+            entry = Entry(song, export_path)
 
-            entry = Entry(song)
-            entry.export_path = export_path
-            export_paths.append(export_path)
+            if export_path in export_paths:
+                entry.set_duplicate_tag()
+                self.c_song_dupes += 1
+            else:
+                self.c_songs_copy += 1
+                export_paths.append(export_path)
+
             self.preview_model.append(row=[entry])
 
         self._update_preview_summary()
         return True
+
+    def _make_plural_file(self, num_files):
+        """
+        Make the word "file" plural if necessary
+        """
+        return 'file' if num_files == 1 else 'files'
 
     def _update_preview_summary(self):
         """
@@ -572,20 +646,17 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         preview_summary_prefix = _('Synchronization will:  ')
         preview_summary = []
 
-        def _make_plural(num_files):
-            """
-            Make the word "file" plural if necessary
-            """
-            file_text = 'file' if num_files == 1 else 'files'
-            return '{} {}'.format(num_files, file_text)
-
-        if self.songs_to_write > 0:
+        if self.c_songs_copy > 0:
+            counter = self.c_songs_copy
             preview_summary.append(
-                _('write {}').format(_make_plural(self.songs_to_write)))
+                _('write {} {}')\
+                .format(counter, self._make_plural_file(counter)))
 
-        if self.songs_to_skip > 0:
+        if self.c_song_dupes > 0:
+            counter = self.c_song_dupes
             preview_summary.append(
-                _('skip {}').format(_make_plural(self.songs_to_skip)))
+                _('skip {} duplicate {}')\
+                .format(counter, self._make_plural_file(counter)))
 
         preview_summary_text = ',  '.join(preview_summary)
         preview_summary_text = preview_summary_prefix + preview_summary_text
@@ -600,6 +671,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         synchronized.
         """
         return [entry.export_path for entry in self.preview_model.values()]
+
+    def _show_sync_error(self, title, message):
+        """
+        Show an error message whenever a synchronization error occurs.
+
+        :param title:   The title of the message popup.
+        :param message: The error message.
+        """
+        qltk.ErrorMessage(self.main_vbox, title, message).run()
+        self.log.print_log(_('Synchronization failed: {}').format(title))
 
     def _get_valid_inputs(self):
         """
@@ -753,10 +834,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         counter_written = counter_skipped = 1
 
-        counter_len = max(self._get_count_digits(self.songs_to_write),
-                          self._get_count_digits(self.songs_to_skip))
+        counter_len = max(self._get_count_digits(self.c_songs_copy),
+                          self._get_count_digits(self.c_song_dupes))
         counter_format = '{:0' + str(counter_len) + 'd}'
-        counter_template = _('{0}/{0}: ').format(counter_format)
+        log_template = '{0}/{0}'.format(counter_format) + '  {tag:18s}  {path:s}'
 
         for entry in self.preview_model.values():
             if not self.running:
@@ -764,33 +845,32 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 return False
             self._run_pending_events()
 
-            counter_prefix = counter_template.format(counter_skipped,
-                                                     self.songs_to_skip)
-            if entry.export_path is None:
-                self.log.print_log(
-                    counter_prefix + self.skip_none_text.format(entry.basename))
-                counter_skipped += 1
-                continue  # to next entry
-            elif Tags.SKIP in entry.export_path:
-                self.log.print_log(counter_prefix + entry.export_path)
-                counter_skipped += 1
-                continue  # to next entry
-            else:
-                counter_prefix = counter_template.format(counter_written,
-                                                         self.songs_to_write)
+            if entry.tag == Entry.Tags.BLANK:
+                # Export, skipping existing files
+                expanded_path = os.path.expanduser(entry.export_path)
+                if os.path.exists(expanded_path):
+                    self.log.print_log(
+                        log_template.format(counter_written, self.c_songs_copy,
+                                            tag=Entry.Tags.STATUS_EXISTS,
+                                            path=entry.export_path))
+                else:
+                    self.log.print_log(
+                        log_template.format(counter_written, self.c_songs_copy,
+                                            tag=Entry.Tags.STATUS_COPY,
+                                            path=entry.export_path))
+                    song_folders = os.path.dirname(expanded_path)
+                    os.makedirs(song_folders, exist_ok=True)
+                    copyfile(entry.filename, expanded_path)
+                counter_written += 1
 
-            # Export, skipping existing files
-            expanded_path = os.path.expanduser(entry.export_path)
-            if os.path.exists(expanded_path):
-                self.log.print_log(_('{}Skipped - already exists: {}')
-                                   .format(counter_prefix, entry.export_path))
-            else:
-                self.log.print_log(_('{}Writing: {}')
-                                   .format(counter_prefix, entry.export_path))
-                song_folders = os.path.dirname(expanded_path)
-                os.makedirs(song_folders, exist_ok=True)
-                copyfile(entry.filename, expanded_path)
-            counter_written += 1
+            elif entry.tag == Entry.Tags.DUPLICATE:
+                # Skip duplicates
+                self.log.print_log(
+                        log_template.format(counter_skipped, self.c_song_dupes,
+                                            tag=Entry.Tags.DUPLICATE,
+                                            path=entry.export_path))
+                counter_skipped += 1
+                continue  # to next entry
 
         return True
 
