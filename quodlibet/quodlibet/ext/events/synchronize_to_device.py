@@ -20,6 +20,7 @@ from quodlibet import _
 from quodlibet import app
 from quodlibet import config
 from quodlibet import get_user_dir
+from quodlibet import ngettext as ngt
 from quodlibet import qltk
 from quodlibet import util
 from quodlibet.pattern import FileFromPattern
@@ -545,7 +546,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             log_suffix = ''
             if counter != 0:
                 log_suffix = _(' This also affected {} other {}.')\
-                             .format(counter, self._make_plural_file(counter))
+                             .format(counter, ngt('file', 'files', counter))
             self.log.print_log(_('Entry path changed successfully.{}')\
                                .format(log_suffix))
 
@@ -633,12 +634,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         self._update_preview_summary()
         return True
 
-    def _make_plural_file(self, num_files):
-        """
-        Make the word "file" plural if necessary
-        """
-        return 'file' if num_files == 1 else 'files'
-
     def _update_preview_summary(self):
         """
         Update the preview summary text field.
@@ -650,13 +645,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             counter = self.c_songs_copy
             preview_summary.append(
                 _('write {} {}')\
-                .format(counter, self._make_plural_file(counter)))
+                .format(counter, ngt('file', 'files', counter)))
 
         if self.c_song_dupes > 0:
             counter = self.c_song_dupes
             preview_summary.append(
                 _('skip {} duplicate {}')\
-                .format(counter, self._make_plural_file(counter)))
+                .format(counter, ngt('file', 'files', counter)))
 
         preview_summary_text = ',  '.join(preview_summary)
         preview_summary_text = preview_summary_prefix + preview_summary_text
