@@ -1,5 +1,6 @@
 # Copyright 2014 Christoph Reiter
 #           2016 Nick Boultbee
+#           2020 Daniel Petrescu
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
