@@ -33,25 +33,13 @@ from quodlibet.qltk import Window
 from quodlibet.qltk.cbes import ComboBoxEntrySave
 from quodlibet.qltk.ccb import ConfigCheckButton
 from quodlibet.qltk.models import ObjectStore
+from quodlibet.qltk.views import HintedTreeView
 from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
+from quodlibet.util import print_d, print_e, print_exc
+from quodlibet.util.enum import enum
 
 PLUGIN_CONFIG_SECTION = _('synchronize_to_device')
-
-
-def _expandable_scroll(min_height=100, max_height=300, expand=True):
-    """
-    Create a ScrolledWindow that expands as content is added.
-
-    :param min_height: The minimum height of the window, in pixels.
-    :param max_height: The maximum height of the window, in pixels. It will grow
-                       up to this height before it starts scrolling the content.
-    :param expand:     Whether the window should expand.
-    :return: A new ScrolledWindow.
-    """
-    return Gtk.ScrolledWindow(min_content_height=min_height,
-                              max_content_height=max_height,
-                              propagate_natural_height=expand)
 
 
 class Entry:
@@ -59,44 +47,28 @@ class Entry:
     An entry in the tree of previewed export paths.
     """
 
-    class Tags:
+    @enum
+    class Tags(str):
         """
         Various tags that will be used in the output.
         """
-        tag_start = '<'
-        tag_end = '>'
-
-        BLANK = ''
-        DUPLICATE = tag_start + 'DUPLICATE' + tag_end
-        DELETE = tag_start + 'DELETE' + tag_end
-
-        STATUS_EXISTS = 'Skip existing file'
-        STATUS_COPY = 'Writing'
+        EMPTY = ''
+        PENDING_COPY = _('Pending copy')
+        PENDING_DELETE = _('Pending delete')
+        DELETE = _('delete')
+        SKIP = _('Skip')
+        SKIP_DUPLICATE = _('DUPLICATE')
+        IN_PROGRESS_SYNC = _('Synchronizing')
+        IN_PROGRESS_DELETE = _('Deleting')
+        RESULT_SUCCESS = _('Success')
+        RESULT_FAILURE = _('FAILURE')
+        RESULT_SKIP_EXISTING = _('Skipped existing file')
 
     def __init__(self, song, export_path=None):
         self._song = song
-        self._export_path = ''
-        self._export_display = ''
-        self._tag = self.Tags.BLANK
-        self._basename = None
+        self.export_path = export_path or ''
+        self.tag = self.Tags.EMPTY
         self._filename = None
-
-        if export_path:
-            self._set_export_path(export_path)
-
-    @property
-    def basename(self):
-        if self._song is not None:
-            return fsn2text(self._song('~basename'))
-        else:
-            return self._basename
-
-    @basename.setter
-    def basename(self, name):
-        if self._song is None:
-            self._basename = name
-        else:
-            raise ValueError('Cannot set the basename of a song.')
 
     @property
     def filename(self):
@@ -111,120 +83,6 @@ class Entry:
             self._filename = name
         else:
             raise ValueError('Cannot set the filename of a song.')
-
-    def set_duplicate_tag(self):
-        self._tag = self.Tags.DUPLICATE
-        self._set_export_display()
-
-    def set_delete_tag(self):
-        self._tag = self.Tags.DELETE
-        self._set_export_display()
-
-    def remove_tag(self):
-        self._tag = self.Tags.BLANK
-        self._set_export_display()
-
-    def _get_tag(self):
-        return self._tag
-
-    def _set_export_path(self, path):
-        self._export_path = path
-        self._set_export_display()
-
-    def _get_export_path(self):
-        return self._export_path
-
-    def _set_export_display(self):
-        if self._export_path == '' or self._tag == self.Tags.BLANK:
-            space = ''
-        else:
-            space = ' '
-        self._export_display = self._tag + space + self._export_path
-
-    def _get_export_display(self):
-        return self._export_display
-
-    export_path = property(_get_export_path, _set_export_path)
-    export_display = property(_get_export_display)
-    tag = property(_get_tag)
-
-
-class SyncLog:
-    """
-    Store and show the current synchronization log in a new window.
-    """
-    _WIDTH = 600
-    _HEIGHT = 300
-
-    def __init__(self, title):
-        self._title = title
-        self._log = []
-
-        self._create_window()
-
-    def _create_window(self):
-        """
-        Create a new window to show the current log messages.
-        """
-        # Create the window
-        self._window = Window()
-        self._window.hide()
-        self._window.connect("delete-event", self._on_delete_event)
-        self._window.set_title(self._title)
-        self._window.set_default_size(self._WIDTH, self._HEIGHT)
-
-        # Create log text view
-        view = Gtk.TextView(left_margin=5, right_margin=5, editable=False)
-        view.modify_font(Pango.font_description_from_string('Monospace'))
-        self.view = view
-        self.buffer = view.get_buffer()
-        log_scroll = Gtk.ScrolledWindow()
-        log_scroll.add(view)
-        self._window.add(log_scroll)
-
-        # Show any pre-existing log entries
-        for entry in self._log:
-            self._show_log(entry)
-
-    def show_window(self, button=None):
-        """
-        Show the window.
-
-        :param button: The widget that called this function.
-        """
-        self._window.show_all()
-
-    def _on_delete_event(self, widget, event):
-        """
-        When closing the window, hide it instead of destroying it.
-
-        :param widget: The object which received the signal to close the window.
-        :param event:  The event which triggered this signal.
-        :return: True to stop other handlers from closing the window;
-                 False to propagate the event and allow the window to be closed.
-        """
-        self._window.hide()
-        return True
-
-    def _show_log(self, text):
-        """
-        Add a log entry to the text view.
-
-        :param text: The text to add.
-        """
-        GLib.idle_add(lambda: self.buffer.insert(self.buffer.get_end_iter(),
-                                                  text + '\n'))
-        GLib.idle_add(lambda: self.view.scroll_to_mark(self.buffer.get_insert(),
-                                                       0.0, True, 0.5, 0.5))
-
-    def print_log(self, text):
-        """
-        Print text to the output TextView window.
-
-        :param text: The text to add.
-        """
-        self._log.append(text)
-        self._show_log(text)
 
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
@@ -249,6 +107,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     default_export_pattern = os.path.join('<artist>', '<album>', '<title>')
     unsafe_filename_chars = re.compile(r'[<>:"/\\|?*\u00FF-\uFFFF]')
 
+    model_cols = {'entry': (0, object),
+                  'tag': (1, str),
+                  'filename': (2, str),
+                  'export': (3, str)}
+
     def PluginPreferences(self, parent):
         # Read saved searches from file
         self.queries = {}
@@ -272,7 +135,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                              self._config_key(query_config))
             check_button.set_active(self.config_get_bool(query_config))
             saved_search_vbox.pack_start(check_button, False, False, 0)
-        saved_search_scroll = _expandable_scroll(min_height=0)
+        saved_search_scroll = self._expandable_scroll(min_h=0, max_h=300)
         saved_search_scroll.add(saved_search_vbox)
         frame = qltk.Frame(label=_('Synchronize the following saved searches:'),
                            child=saved_search_scroll)
@@ -346,29 +209,36 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         preview_stop_button.connect('clicked', self._stop_preview)
         self.preview_stop_button = preview_stop_button
 
-        # Preview details view
-        preview_tree = Gtk.TreeView(model=ObjectStore())
-        preview_scroll = _expandable_scroll(min_height=50, max_height=500)
-        preview_scroll.add(preview_tree)
-        self.preview_model = preview_tree.get_model()
+        # Details view
+        column_types = [column[1] for column in self.model_cols.values()]
+        self.model = Gtk.ListStore(*column_types)
+        self.details_tree = details_tree = HintedTreeView(model=self.model)
+        details_scroll = self._expandable_scroll()
+        details_scroll.set_shadow_type(Gtk.ShadowType.IN)
+        details_scroll.add(details_tree)
+
+        # Preview column: status
+        render = Gtk.CellRendererText()
+        column = self._tree_view_column(render, self._cdf_status,
+                                        title=_('Status'), expand=False,
+                                        sort=self._model_col_id('tag'))
+        details_tree.append_column(column)
 
         # Preview column: file
         render = Gtk.CellRendererText()
-        column = TreeViewColumn(title=_('File'))
-        column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        column.set_cell_data_func(render, self._set_cell_data_basename)
-        column.pack_start(render, True)
-        preview_tree.append_column(column)
+        column = self._tree_view_column(render, self._cdf_source_path,
+                                        title=_('Source File'),
+                                        sort=self._model_col_id('filename'))
+        details_tree.append_column(column)
 
         # Preview column: export path
         render = Gtk.CellRendererText()
-        column = TreeViewColumn(title=_('Export Path'))
-        column.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
-        column.set_cell_data_func(render, self._set_cell_data_export_path)
         render.set_property('editable', True)
         render.connect('edited', self._row_edited)
-        column.pack_start(render, True)
-        preview_tree.append_column(column)
+        column = self._tree_view_column(render, self._cdf_export_path,
+                                        title=_('Export Path'),
+                                        sort=self._model_col_id('export'))
+        details_tree.append_column(column)
 
         # Preview summary labels
         self.prvw_summary_label = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
@@ -383,10 +253,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         preview_vbox = Gtk.VBox(spacing=self.spacing_large)
         preview_vbox.pack_start(preview_start_button, False, False, 0)
         preview_vbox.pack_start(preview_stop_button, False, False, 0)
-        preview_vbox.pack_start(preview_scroll, False, False, 0)
+        preview_vbox.pack_start(details_scroll, True, True, 0)
         preview_vbox.pack_start(self.prvw_summary_label, False, False, 0)
         preview_vbox.pack_start(self.prvw_info_label, False, False, 0)
-        main_vbox.pack_start(preview_vbox, False, False, 0)
+        main_vbox.pack_start(preview_vbox, True, True, 0)
 
         # Start sync button
         sync_start_button = qltk.Button(label=_('Start synchronization'),
@@ -410,14 +280,21 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         sync_vbox.pack_start(sync_stop_button, False, False, 0)
         main_vbox.pack_start(sync_vbox, False, False, 0)
 
-        # Open log button
-        self.log = SyncLog(self.PLUGIN_NAME + ': Log')
-        open_log_button = qltk.Button(label=_('Open log window'),
-                                      icon_name=Icons.EDIT)
-        open_log_button.connect('clicked', self.log.show_window)
-        main_vbox.pack_end(open_log_button, False, False, 0)
-
         return main_vbox
+
+    def _expandable_scroll(self, min_h=50, max_h=-1, expand=True):
+        """
+        Create a ScrolledWindow that expands as content is added.
+
+        :param min_h: The minimum height of the window, in pixels.
+        :param max_h: The maximum height of the window, in pixels. It will grow
+                      up to this height before it starts scrolling the content.
+        :param expand:     Whether the window should expand.
+        :return: A new ScrolledWindow.
+        """
+        return Gtk.ScrolledWindow(min_content_height=min_h,
+                                  max_content_height=max_h,
+                                  propagate_natural_height=expand)
 
     def _label_with_icon(self, text, icon_name):
         """
@@ -435,6 +312,35 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         hbox.pack_start(label, True, True, 0)
 
         return hbox
+
+    def _tree_view_column(self, render, cdf, title=None, sort=None,
+                          expand=True, resize=True, reorder=True):
+        """
+        Create a new TreeViewColumn with the given properties.
+
+        :param render:  The A Gtk.CellRenderer of this cell.
+        :param cdf:     The Gtk.TreeCellDataFunc to use for updating content.
+        :param title:   The column's title.
+        :param sort:    The model column to use when sorting this column.
+        :param expand:  Whether the column width should automatically expand.
+        :param resize:  Whether the column can be resized.
+        :param reorder: Whether the column can be reordered.
+        :return: The new TreeViewColumn.
+        """
+        tvc = Gtk.TreeViewColumn()
+        tvc.set_sizing(Gtk.TreeViewColumnSizing.AUTOSIZE)
+        tvc.set_expand(expand)
+        tvc.set_resizable(resize)
+        tvc.set_reorderable(reorder)
+        if title:
+            tvc.set_title(title)
+        if resize:
+            render.set_property('ellipsize', Pango.EllipsizeMode.END)
+        if sort:
+            tvc.set_sort_column_id(sort)
+        tvc.set_cell_data_func(render, cdf)
+        tvc.pack_start(render, True)
+        return tvc
 
     def _destination_path_changed(self, entry):
         """
@@ -486,142 +392,142 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         config.set(PM.CONFIG_SECTION, self.CONFIG_PATTERN_KEY, entry.get_text())
 
-    @staticmethod
-    def _set_cell_data_basename(column, cell, model, iter_, data):
+    def _cdf_status(self, column, cell, model, iter_, data):
         """
-        Handle entering data into the "File" column of the export path previews.
-        This function acts as a Gtk.TreeCellDataFunc callback.
-
-        :param column: The selected column of the preview tree.
-        :param cell:   The cell that is being rendered by the column.
-        :param model:  The model containing the tree's data.
-        :param iter_:  The Gtk.TreeIter struct.
-        :param data:   The user data.
+        Handle entering data into the "Status" column of the sync previews.
         """
-        entry = model.get_value(iter_)
-        cell.set_property('text', entry.basename)
+        cell.set_property('text', model[iter_][self._model_col_id('tag')])
 
-    @staticmethod
-    def _set_cell_data_export_path(column, cell, model, iter_, data):
+    def _cdf_source_path(self, column, cell, model, iter_, data):
         """
-        Handle entering data into the "Export Path" column of the export path
-        previews.
-        This function acts as a Gtk.TreeCellDataFunc callback.
-
-        :param column: The selected column of the preview tree.
-        :param cell:   The cell that is being rendered by the column.
-        :param model:  The model containing the tree's data.
-        :param iter_:  The Gtk.TreeIter struct.
-        :param data:   The user data.
+        Handle entering data into the "File" column of the sync previews.
         """
-        entry = model.get_value(iter_)
-        cell.set_property('text', entry.export_display)
+        cell.set_property('text', model[iter_][self._model_col_id('filename')])
 
-    def _row_edited(self, renderer, path, new_text):
+    def _cdf_export_path(self, column, cell, model, iter_, data):
+        """
+        Handle entering data into the "Export" column of the sync previews.
+        """
+        cell.set_property('text', model[iter_][self._model_col_id('export')])
+
+    def _row_edited(self, renderer, path, new_path):
         """
         Handle a manual edit of a previewed export path.
 
         :param renderer: The object which received the signal.
         :param path:     The path identifying the edited cell.
-        :param new_text: The new text entered by the user.
+        :param new_path: The new path entered by the user.
         """
 
         def _make_duplicate(entry, old_unique):
             """ Mark the given entry as a duplicate. """
-            entry.set_duplicate_tag()
+            print_d(entry.filename)
+            entry.tag = Entry.Tags.SKIP_DUPLICATE
             self.c_song_dupes += 1
             if old_unique:
                 self.c_songs_copy -= 1
 
         def _make_unique(entry, old_duplicate):
             """ Mark the given entry as a unique file. """
-            entry.remove_tag()
+            print_d(entry.filename)
+            entry.tag = Entry.Tags.PENDING_COPY
             self.c_songs_copy += 1
             if old_duplicate:
                 self.c_song_dupes -= 1
 
         def _make_skip(entry, counter):
             """ Skip the given entry during synchronization. """
-            entry.remove_tag()
+            print_d(entry.filename)
+            entry.tag = Entry.Tags.SKIP
             entry.export_path = ''
             return counter - 1
 
-        def _update_others():
-            """ Update all previewed paths based on the current change. """
-            counter = 0
-            for model_entry in self.preview_model.values():
-                if model_entry is entry \
-                        or model_entry.export_display == Entry.Tags.DELETE \
-                        or model_entry.export_display == '':
-                    continue
-                elif model_entry.export_path == new_path \
-                        and model_entry.tag == Entry.Tags.BLANK:
-                    _make_duplicate(model_entry, True)
-                    counter += 1
-                elif model_entry.tag == Entry.Tags.DUPLICATE \
-                        and model_entry.export_path != new_path \
-                        and self._get_paths()[model_entry.export_path] == 1:
-                    _make_unique(model_entry, True)
-                    counter += 1
-            return counter
+        def _update_other_song(model, path, iter_, *data):
+            """
+            Update a previewed path based on the current change.
+            This is a callback function passed to Gtk.TreeModel.foreach() to
+            iterate over the rows in a tree model.
+
+            :return: True to stop iterating, False to continue.
+            """
+            model_entry = model[path][self._model_col_id('entry')]
+            if model_entry is entry \
+                    or model_entry.tag == Entry.Tags.DELETE \
+                    or model_entry.export_path == '':
+                pass
+            elif model_entry.export_path == new_path \
+                    and model_entry.tag == Entry.Tags.PENDING_COPY:
+                _make_duplicate(model_entry, True)
+                self._update_model_value(iter_, 'tag', model_entry.tag)
+            elif model_entry.tag == Entry.Tags.SKIP_DUPLICATE \
+                    and model_entry.export_path != new_path \
+                    and self._get_paths()[model_entry.export_path] == 1:
+                _make_unique(model_entry, True)
+                self._update_model_value(iter_, 'tag', model_entry.tag)
+            return False
 
         path = Gtk.TreePath.new_from_string(path)
-        entry = self.preview_model[path][0]
-        if entry.export_display != new_text:
+        entry = self.model[path][self._model_col_id('entry')]
+        if entry.export_path != new_path:
 
-            old_path_is_duplicate = entry.tag == Entry.Tags.DUPLICATE
-            old_path_is_delete = entry.tag == Entry.Tags.DELETE
-            old_path_is_blank = entry.export_display == ''
+            old_path_is_duplicate = entry.tag == Entry.Tags.SKIP_DUPLICATE
+            old_path_is_delete = entry.tag == Entry.Tags.PENDING_DELETE
+            old_path_is_empty = not entry.export_path and not old_path_is_delete
             old_path_is_unique = not (old_path_is_duplicate
                                       or old_path_is_delete
-                                      or old_path_is_blank)
+                                      or old_path_is_empty)
 
             previewed_paths = self._get_paths().keys()
-            new_path = new_text.split(Entry.Tags.tag_end)[-1].strip()
 
             new_path_is_duplicate = new_path in previewed_paths
-            new_path_is_delete = new_text == Entry.Tags.DELETE
-            new_path_is_blank = new_text == ''
+            new_path_is_delete = new_path.lower() == Entry.Tags.DELETE
+            new_path_is_empty = not new_path and not new_path_is_delete
             new_path_is_unique = not (new_path_is_duplicate
                                       or new_path_is_delete
-                                      or new_path_is_blank)
+                                      or new_path_is_empty)
 
-            other_songs_updated = 0
+            print_d(_('\tFilename: {}\n\tOld path: {}\n\tNew path: {}')\
+                    .format(entry.filename, {'U':old_path_is_unique,
+                            'D':old_path_is_duplicate, 'Del':old_path_is_delete,
+                            'E':old_path_is_empty}, {'U':new_path_is_unique,
+                            'D':new_path_is_duplicate, 'Del':new_path_is_delete,
+                            'E':new_path_is_empty}))
 
-            # If the old path was blank...
-            if old_path_is_blank and new_path_is_blank:
+            # If the old path was empty...
+            if old_path_is_empty and new_path_is_empty:
                 pass
-            elif old_path_is_blank and new_path_is_delete:
+            elif old_path_is_empty and new_path_is_delete:
                 try:
+                    print_d(_('Make delete: {}').format(entry.filename))
                     Path(entry.filename).relative_to(self.expanded_destination)
-                    entry.set_delete_tag()
+                    entry.tag = Entry.Tags.PENDING_DELETE
                     self.c_songs_delete += 1
                 except ValueError:
                     pass
-            elif old_path_is_blank and new_path_is_duplicate:
+            elif old_path_is_empty and new_path_is_duplicate:
                 _make_duplicate(entry, False)
                 entry.export_path = new_path
-            elif old_path_is_blank and new_path_is_unique:
+            elif old_path_is_empty and new_path_is_unique:
                 _make_unique(entry, False)
                 entry.export_path = new_path
 
             # If the old path was a deletion...
-            elif old_path_is_delete and new_path_is_blank:
-                self.c_songs_delete = _make_skip(entry, self.c_songs_delete)
-            elif old_path_is_delete and new_path_is_delete:
+            elif old_path_is_delete and new_path_is_empty:
                 pass
+            elif old_path_is_delete and new_path_is_delete:
+                self.c_songs_delete = _make_skip(entry, self.c_songs_delete)
             elif old_path_is_delete and new_path_is_duplicate:
                 pass
             elif old_path_is_delete and new_path_is_unique:
                 pass
 
             # If the old path was a duplicate...
-            elif old_path_is_duplicate and new_path_is_blank:
+            elif old_path_is_duplicate and new_path_is_empty:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
-                other_songs_updated = _update_others()
+                self.model.foreach(_update_other_song)
             elif old_path_is_duplicate and new_path_is_delete:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
-                other_songs_updated = _update_others()
+                self.model.foreach(_update_other_song)
             elif old_path_is_duplicate and new_path_is_duplicate:
                 entry.export_path = new_path
             elif old_path_is_duplicate and new_path_is_unique:
@@ -629,29 +535,51 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 entry.export_path = new_path
 
             # If the old path was unique...
-            elif old_path_is_unique and new_path_is_blank:
+            elif old_path_is_unique and new_path_is_empty:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
-                other_songs_updated = _update_others()
+                self.model.foreach(_update_other_song)
             elif old_path_is_unique and new_path_is_delete:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
-                other_songs_updated = _update_others()
+                self.model.foreach(_update_other_song)
             elif old_path_is_unique and new_path_is_duplicate:
                 _make_duplicate(entry, True)
                 entry.export_path = new_path
             elif old_path_is_unique and new_path_is_unique:
                 entry.export_path = new_path
-                other_songs_updated = _update_others()
+                self.model.foreach(_update_other_song)
 
-            # Log a message
-            log_suffix = ''
-            if other_songs_updated:
-                log_suffix = _(' This also affected {} other {}.')\
-                            .format(other_songs_updated, ngt('file', 'files', other_songs_updated))
-            self.log.print_log(_('Entry path changed successfully.{}')\
-                               .format(log_suffix))
-
-            # Update the summary field
+            # Update the model and the summary field
+            self.model.set_row(self.model.get_iter(path),
+                               self._make_model_row(entry))
             self._update_preview_summary()
+
+    def _update_model_value(self, iter_, column, value):
+        """
+        Set the data in a since cell of the ListStore model.
+
+        :param iter_:  A Gtk.TreeIter for the row being modified.
+        :param column: The name of the column to modify.
+        :param value:  The new value for the cell.
+        """
+        self.model.set_value(iter_, self._model_col_id(column), value)
+
+    def _model_col_id(self, name):
+        """
+        Get the column ID from the given name.
+
+        :param name: The column name to search for.
+        :raises: KeyError if a column with the given name does not exist.
+        """
+        return self.model_cols[name][0]
+
+    @staticmethod
+    def _make_model_row(entry):
+        """
+        Create a new row to insert into the ListStore model.
+
+        :param entry: The Entry to insert.
+        """
+        return [entry, entry.tag, entry.filename, entry.export_path]
 
     @staticmethod
     def _run_pending_events():
@@ -667,7 +595,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The start preview button.
         """
-        self.log.print_log('Starting synchronization preview.')
+        print_d(_('Starting synchronization preview'))
         self.running = True
 
         # Change button visibility
@@ -675,22 +603,21 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         self.preview_stop_button.set_visible(True)
 
         success = self._run_preview()
-        self._stop_preview(None)
+        self._stop_preview()
 
         if not success:
             return
 
         self.sync_start_button.set_sensitive(True)
-        self.log.print_log('Finished synchronization preview.')
+        print_d(_('Finished synchronization preview'))
 
-    def _stop_preview(self, button):
+    def _stop_preview(self, button=None):
         """
         Stop the generation of export paths for all songs.
 
         :param button: The stop preview button.
         """
-        if button is not None:
-            self.log.print_log('Stopping synchronization preview.')
+        print_d(_('Stopping synchronization preview'))
         self.running = False
 
         # Change button visibility
@@ -710,13 +637,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Get a list containing all songs to export
         songs = self._get_songs_from_queries()
+        self.model.clear()
         self.c_songs_copy = self.c_song_dupes = self.c_songs_delete = 0
         export_paths = []
-        self.preview_model.clear()
 
         for song in songs:
             if not self.running:
-                self.log.print_log('Stopped synchronization preview.')
+                print_d(_('Stopped synchronization preview'))
                 return False
             self._run_pending_events()
 
@@ -728,13 +655,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
             expanded_path = os.path.expanduser(export_path)
             if expanded_path in export_paths:
-                entry.set_duplicate_tag()
+                entry.tag = Entry.Tags.SKIP_DUPLICATE
                 self.c_song_dupes += 1
             else:
+                entry.tag = Entry.Tags.PENDING_COPY
                 self.c_songs_copy += 1
                 export_paths.append(expanded_path)
 
-            self.preview_model.append(row=[entry])
+            self.model.append(row=self._make_model_row(entry))
 
         # List files to delete
         for root, __, files in os.walk(self.expanded_destination):
@@ -742,11 +670,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 file_path = os.path.join(root, name)
                 if file_path not in export_paths:
                     entry = Entry(None)
-                    entry.basename = os.path.relpath(file_path,
-                                                     self.expanded_destination)
                     entry.filename = file_path
-                    entry.set_delete_tag()
-                    self.preview_model.append(row=[entry])
+                    entry.tag = Entry.Tags.PENDING_DELETE
+                    self.model.append(row=self._make_model_row(entry))
                     self.c_songs_delete += 1
 
         self._update_preview_summary()
@@ -782,7 +708,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         self.prvw_summary_label.set_label(preview_summary_text)
         self.prvw_summary_label.set_visible(True)
         self.prvw_info_label.set_visible(True)
-        self.log.print_log(preview_summary_text)
+        print_d(preview_summary_text)
 
     def _get_paths(self):
         """
@@ -790,8 +716,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         synchronized.
         """
         paths = {}
-        for entry in self.preview_model.values():
-            if entry.tag != Entry.Tags.DELETE and entry.export_display != '':
+        for row in self.model:
+            entry = row[self._model_col_id('entry')]
+            if entry.tag != Entry.Tags.PENDING_DELETE and entry.export_path:
                 if entry.export_path not in paths.keys():
                     paths[entry.export_path] = 1
                 else:
@@ -806,7 +733,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param message: The error message.
         """
         qltk.ErrorMessage(self.main_vbox, title, message).run()
-        self.log.print_log(_('Synchronization failed: {}').format(title))
+        print_e(title)
 
     def _get_valid_inputs(self):
         """
@@ -865,6 +792,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if any(query.search(song) for query in enabled_queries):
                 selected_songs.append(song)
 
+        print_d(_('Found {} songs to synchronize').format(len(selected_songs)))
         return selected_songs
 
     def _get_export_path(self, song, destination_path, export_pattern):
@@ -923,7 +851,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The start sync button.
         """
-        self.log.print_log('Starting song synchronization.')
+        # Check sort column
+        sort_columns = [c.get_title() for c in self.details_tree.get_columns()
+                        if c.get_sort_indicator()]
+        if 'Status' in sort_columns:
+            self._show_sync_error(_('Unable to sync'),
+                                  _('Cannot start synchronization while '
+                                    'sorting by <b>Status</b>.'))
+            return
+
+        print_d(_('Starting song synchronization'))
         self.running = True
 
         # Change button visibility
@@ -933,17 +870,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if not self._run_sync():
             return
 
-        self._stop_sync(None)
-        self.log.print_log('Finished song synchronization.')
+        self._stop_sync()
+        print_d(_('Finished song synchronization'))
 
-    def _stop_sync(self, button):
+    def _stop_sync(self, button=None):
         """
         Stop the song synchronization.
 
         :param button: The stop sync button.
         """
-        if button is not None:
-            self.log.print_log('Stopping song synchronization.')
+        print_d(_('Stopping song synchronization'))
         self.running = False
 
         # Change button visibility
@@ -957,84 +893,68 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :return: Whether the synchronization was successful.
         """
-        counter_written = counter_skipped = counter_deleted = 1
-
-        counter_len = max(self._get_count_digits(self.c_songs_copy),
-                          self._get_count_digits(self.c_song_dupes))
-        counter_format = '{:0' + str(counter_len) + 'd}'
-        log_template = '{0}/{0}'.format(counter_format) + '  {tag:18s}  {path:s}'
-        self.log_template = log_template
-
-        for entry in self.preview_model.values():
-            if not self.running:
-                self.log.print_log('Stopped song synchronization.')
-                return False
-            self._run_pending_events()
-
-            if not entry.export_path and not entry.tag:
-                continue  # to next entry
-
-            expanded_path = os.path.expanduser(entry.export_path)
-            if entry.tag == Entry.Tags.BLANK:
-                # Export, skipping existing files
-                if os.path.exists(expanded_path):
-                    self.log.print_log(
-                        log_template.format(counter_written, self.c_songs_copy,
-                                            tag=Entry.Tags.STATUS_EXISTS,
-                                            path=expanded_path))
-                else:
-                    self.log.print_log(
-                        log_template.format(counter_written, self.c_songs_copy,
-                                            tag=Entry.Tags.STATUS_COPY,
-                                            path=expanded_path))
-                    song_folders = os.path.dirname(expanded_path)
-                    os.makedirs(song_folders, exist_ok=True)
-                    copyfile(entry.filename, expanded_path)
-                counter_written += 1
-
-            elif entry.tag == Entry.Tags.DUPLICATE:
-                # Skip duplicates
-                self.log.print_log(
-                    log_template.format(counter_skipped, self.c_song_dupes,
-                                        tag=Entry.Tags.DUPLICATE,
-                                        path=expanded_path))
-                counter_skipped += 1
-
-            elif entry.tag == Entry.Tags.DELETE:
-                # Delete file
-                self.log.print_log(
-                    log_template.format(counter_deleted, self.c_songs_delete,
-                                        tag=Entry.Tags.DELETE,
-                                        path=entry.filename))
-                try:
-                    os.remove(entry.filename)
-                    counter_deleted += 1
-                except IsADirectoryError:
-                    pass
-                except OSError as ex:
-                    self.log.print_log(_('Failed to delete: {}').format(ex))
-
+        self.model.foreach(self._sync_entry)
+        if not self.running:
+            return False
         self._remove_empty_dirs()
         return True
 
-    def _get_count_digits(self, number):
+    def _sync_entry(self, model, path, iter_, *data):
         """
-        Get the number of digits in an integer.
+        Synchronize a single song.
+        This is a callback function passed to Gtk.TreeModel.foreach() to iterate
+        over the rows in a tree model.
 
-        :param number: The number.
+        :return: True to stop iterating, False to continue.
         """
-        # Handle zero
-        if number == 0:
-            return 1
+        entry = model[path][self._model_col_id('entry')]
+        if not self.running:
+            print_d(_('Stopped song synchronization'))
+            return True
+        self._run_pending_events()
+        print_d(_('{} - "{}"').format(entry.tag, entry.filename))
 
-        # Handle negative numbers
-        number = abs(number)
+        if not entry.export_path and not entry.tag:
+            return False
 
-        if number <= 999999999999997:
-            return floor(log10(number)) + 1
+        if entry.tag == Entry.Tags.PENDING_COPY:
+            # Export, skipping existing files
+            expanded_path = os.path.expanduser(entry.export_path)
+            if os.path.exists(expanded_path):
+                entry.tag = Entry.Tags.RESULT_SKIP_EXISTING
+                self._update_model_value(iter_, 'tag', entry.tag)
+            else:
+                entry.tag = Entry.Tags.IN_PROGRESS_SYNC
+                self._update_model_value(iter_, 'tag', entry.tag)
 
-        # Avoid floating-point errors for large numbers
-        return len(str(number))
+                song_folders = os.path.dirname(expanded_path)
+                os.makedirs(song_folders, exist_ok=True)
+                try:
+                    copyfile(entry.filename, expanded_path)
+                except Exception as ex:
+                    entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
+                    self._update_model_value(iter_, 'tag', entry.tag)
+                    print_exc()
+                else:
+                    entry.tag = Entry.Tags.RESULT_SUCCESS
+                    self._update_model_value(iter_, 'tag', entry.tag)
+
+        elif entry.tag == Entry.Tags.PENDING_DELETE:
+            # Delete file
+            try:
+                entry.tag = Entry.Tags.IN_PROGRESS_DELETE
+                self._update_model_value(iter_, 'tag', entry.tag)
+
+                os.remove(entry.filename)
+            except Exception as ex:
+                entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
+                self._update_model_value(iter_, 'tag', entry.tag)
+                print_exc()
+            else:
+                entry.tag = Entry.Tags.RESULT_SUCCESS
+                self._update_model_value(iter_, 'tag', entry.tag)
+
+        return False
 
     def _remove_empty_dirs(self):
         """
@@ -1044,11 +964,17 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             for dirname in dirs:
                 dir_path = os.path.realpath(os.path.join(root, dirname))
                 if not os.listdir(dir_path):
+                    entry = Entry(None)
+                    entry.filename = dir_path
+                    entry.tag = Entry.Tags.IN_PROGRESS_DELETE
+                    iter_ = self.model.append(row=self._make_model_row(entry))
+                    print_d(_('Removing "{}"').format(entry.filename))
                     try:
-                        self.log.print_log(
-                            self.log_template.format(0, 0,
-                                                     tag=Entry.Tags.DELETE,
-                                                     path=dir_path))
                         os.rmdir(dir_path)
-                    except OSError as ex:
-                        self.log.print_log(_('Failed to delete: {}').format(ex))
+                    except Exception as ex:
+                        entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
+                        self._update_model_value(iter_, 'tag', entry.tag)
+                        print_exc()
+                    else:
+                        entry.tag = Entry.Tags.RESULT_SUCCESS
+                        self._update_model_value(iter_, 'tag', entry.tag)
