@@ -602,12 +602,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         self.preview_start_button.set_visible(False)
         self.preview_stop_button.set_visible(True)
 
-        success = self._run_preview()
-        self._stop_preview()
-
-        if not success:
+        if not self._run_preview():
             return
 
+        self._stop_preview()
         self.sync_start_button.set_sensitive(True)
         print_d(_('Finished synchronization preview'))
 
@@ -646,6 +644,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 print_d(_('Stopped synchronization preview'))
                 return False
             self._run_pending_events()
+            if not self.destination_entry.get_text():
+                print_d(_('A different plugin was selected - stop preview'))
+                return False
 
             export_path = self._get_export_path(song, destination_path, pattern)
             if not export_path:
@@ -912,6 +913,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             print_d(_('Stopped song synchronization'))
             return True
         self._run_pending_events()
+        if not self.destination_entry.get_text():
+            print_d(_('A different plugin was selected - stop synchronization'))
+            return True
+
         print_d(_('{} - "{}"').format(entry.tag, entry.filename))
 
         if not entry.export_path and not entry.tag:
