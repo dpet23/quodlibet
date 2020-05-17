@@ -36,6 +36,7 @@ from quodlibet.qltk.models import ObjectStore
 from quodlibet.qltk.views import HintedTreeView
 from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
+from quodlibet.util import print_d, print_e, print_exc
 from quodlibet.util.enum import enum
 
 PLUGIN_CONFIG_SECTION = _('synchronize_to_device')
@@ -51,7 +52,7 @@ class Entry:
         """
         Various tags that will be used in the output.
         """
-        BLANK = ''
+        EMPTY = ''
         PENDING_COPY = _('Pending copy')
         PENDING_DELETE = _('Pending delete')
         DELETE = _('delete')
@@ -66,7 +67,7 @@ class Entry:
     def __init__(self, song, export_path=None):
         self._song = song
         self.export_path = export_path or ''
-        self.tag = self.Tags.BLANK
+        self.tag = self.Tags.EMPTY
         self._filename = None
 
     @property
@@ -420,6 +421,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         def _make_duplicate(entry, old_unique):
             """ Mark the given entry as a duplicate. """
+            print_d(entry.filename)
             entry.tag = Entry.Tags.SKIP_DUPLICATE
             self.c_song_dupes += 1
             if old_unique:
@@ -427,6 +429,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         def _make_unique(entry, old_duplicate):
             """ Mark the given entry as a unique file. """
+            print_d(entry.filename)
             entry.tag = Entry.Tags.PENDING_COPY
             self.c_songs_copy += 1
             if old_duplicate:
@@ -434,6 +437,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         def _make_skip(entry, counter):
             """ Skip the given entry during synchronization. """
+            print_d(entry.filename)
             entry.tag = Entry.Tags.SKIP
             entry.export_path = ''
             return counter - 1
@@ -468,39 +472,47 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
             old_path_is_duplicate = entry.tag == Entry.Tags.SKIP_DUPLICATE
             old_path_is_delete = entry.tag == Entry.Tags.PENDING_DELETE
-            old_path_is_blank = not entry.export_path and not old_path_is_delete
+            old_path_is_empty = not entry.export_path and not old_path_is_delete
             old_path_is_unique = not (old_path_is_duplicate
                                       or old_path_is_delete
-                                      or old_path_is_blank)
+                                      or old_path_is_empty)
 
             previewed_paths = self._get_paths().keys()
 
             new_path_is_duplicate = new_path in previewed_paths
             new_path_is_delete = new_path.lower() == Entry.Tags.DELETE
-            new_path_is_blank = not new_path and not new_path_is_delete
+            new_path_is_empty = not new_path and not new_path_is_delete
             new_path_is_unique = not (new_path_is_duplicate
                                       or new_path_is_delete
-                                      or new_path_is_blank)
+                                      or new_path_is_empty)
 
-            # If the old path was blank...
-            if old_path_is_blank and new_path_is_blank:
+            print_d(_('\tFilename: {}\n\tOld path: {}\n\tNew path: {}')\
+                    .format(entry.filename, {'U':old_path_is_unique,
+                            'D':old_path_is_duplicate, 'Del':old_path_is_delete,
+                            'E':old_path_is_empty}, {'U':new_path_is_unique,
+                            'D':new_path_is_duplicate, 'Del':new_path_is_delete,
+                            'E':new_path_is_empty}))
+
+            # If the old path was empty...
+            if old_path_is_empty and new_path_is_empty:
                 pass
-            elif old_path_is_blank and new_path_is_delete:
+            elif old_path_is_empty and new_path_is_delete:
                 try:
+                    print_d(_('Make delete: {}').format(entry.filename))
                     Path(entry.filename).relative_to(self.expanded_destination)
                     entry.tag = Entry.Tags.PENDING_DELETE
                     self.c_songs_delete += 1
                 except ValueError:
                     pass
-            elif old_path_is_blank and new_path_is_duplicate:
+            elif old_path_is_empty and new_path_is_duplicate:
                 _make_duplicate(entry, False)
                 entry.export_path = new_path
-            elif old_path_is_blank and new_path_is_unique:
+            elif old_path_is_empty and new_path_is_unique:
                 _make_unique(entry, False)
                 entry.export_path = new_path
 
             # If the old path was a deletion...
-            elif old_path_is_delete and new_path_is_blank:
+            elif old_path_is_delete and new_path_is_empty:
                 pass
             elif old_path_is_delete and new_path_is_delete:
                 self.c_songs_delete = _make_skip(entry, self.c_songs_delete)
@@ -510,7 +522,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 pass
 
             # If the old path was a duplicate...
-            elif old_path_is_duplicate and new_path_is_blank:
+            elif old_path_is_duplicate and new_path_is_empty:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
             elif old_path_is_duplicate and new_path_is_delete:
@@ -523,7 +535,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 entry.export_path = new_path
 
             # If the old path was unique...
-            elif old_path_is_unique and new_path_is_blank:
+            elif old_path_is_unique and new_path_is_empty:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
             elif old_path_is_unique and new_path_is_delete:
@@ -583,6 +595,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The start preview button.
         """
+        print_d(_('Starting synchronization preview'))
         self.running = True
 
         # Change button visibility
@@ -596,6 +609,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             return
 
         self.sync_start_button.set_sensitive(True)
+        print_d(_('Finished synchronization preview'))
 
     def _stop_preview(self, button=None):
         """
@@ -603,6 +617,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The stop preview button.
         """
+        print_d(_('Stopping synchronization preview'))
         self.running = False
 
         # Change button visibility
@@ -628,6 +643,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         for song in songs:
             if not self.running:
+                print_d(_('Stopped synchronization preview'))
                 return False
             self._run_pending_events()
 
@@ -692,6 +708,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         self.prvw_summary_label.set_label(preview_summary_text)
         self.prvw_summary_label.set_visible(True)
         self.prvw_info_label.set_visible(True)
+        print_d(preview_summary_text)
 
     def _get_paths(self):
         """
@@ -716,6 +733,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param message: The error message.
         """
         qltk.ErrorMessage(self.main_vbox, title, message).run()
+        print_e(title)
 
     def _get_valid_inputs(self):
         """
@@ -774,6 +792,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if any(query.search(song) for query in enabled_queries):
                 selected_songs.append(song)
 
+        print_d(_('Found {} songs to synchronize').format(len(selected_songs)))
         return selected_songs
 
     def _get_export_path(self, song, destination_path, export_pattern):
@@ -841,6 +860,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                     'sorting by <b>Status</b>.'))
             return
 
+        print_d(_('Starting song synchronization'))
         self.running = True
 
         # Change button visibility
@@ -851,6 +871,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             return
 
         self._stop_sync()
+        print_d(_('Finished song synchronization'))
 
     def _stop_sync(self, button=None):
         """
@@ -858,6 +879,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The stop sync button.
         """
+        print_d(_('Stopping song synchronization'))
         self.running = False
 
         # Change button visibility
@@ -887,8 +909,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         entry = model[path][self._model_col_id('entry')]
         if not self.running:
+            print_d(_('Stopped song synchronization'))
             return True
         self._run_pending_events()
+        print_d(_('{} - "{}"').format(entry.tag, entry.filename))
 
         if not entry.export_path and not entry.tag:
             return False
@@ -910,6 +934,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 except Exception as ex:
                     entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                     self._update_model_value(iter_, 'tag', entry.tag)
+                    print_exc()
                 else:
                     entry.tag = Entry.Tags.RESULT_SUCCESS
                     self._update_model_value(iter_, 'tag', entry.tag)
@@ -924,6 +949,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             except Exception as ex:
                 entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                 self._update_model_value(iter_, 'tag', entry.tag)
+                print_exc()
             else:
                 entry.tag = Entry.Tags.RESULT_SUCCESS
                 self._update_model_value(iter_, 'tag', entry.tag)
@@ -942,11 +968,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     entry.filename = dir_path
                     entry.tag = Entry.Tags.IN_PROGRESS_DELETE
                     iter_ = self.model.append(row=self._make_model_row(entry))
+                    print_d(_('Removing "{}"').format(entry.filename))
                     try:
                         os.rmdir(dir_path)
                     except Exception as ex:
                         entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                         self._update_model_value(iter_, 'tag', entry.tag)
+                        print_exc()
                     else:
                         entry.tag = Entry.Tags.RESULT_SUCCESS
                         self._update_model_value(iter_, 'tag', entry.tag)
