@@ -38,9 +38,9 @@ class ColumnModeSelection(Gtk.VBox):
 
         group = None
         mode_label = {
-            ColumnMode.SMALL: _("Small"),
-            ColumnMode.WIDE: _("Wide"),
-            ColumnMode.COLUMNAR: _("Columnar"),
+                ColumnMode.SMALL: _("Small"),
+                ColumnMode.WIDE: _("Wide"),
+                ColumnMode.COLUMNAR: _("Columnar"),
         }
         for mode in ColumnMode.values:
             lbl = mode_label[ColumnMode.value_of(mode)]
@@ -211,8 +211,8 @@ class PreferencesButton(Gtk.HBox):
         menu.show_all()
 
         button = MenuButton(
-            SymbolicIconImage(Icons.EMBLEM_SYSTEM, Gtk.IconSize.MENU),
-            arrow=True)
+                SymbolicIconImage(Icons.EMBLEM_SYSTEM, Gtk.IconSize.MENU),
+                arrow=True)
         button.set_menu(menu)
         button.show()
         self.pack_start(button, True, True, 0)

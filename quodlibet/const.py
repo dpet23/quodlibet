@@ -57,8 +57,8 @@ class MinVersions(object):
 
     PYTHON3 = Version("Python3", 3, 6)
     MUTAGEN = Version("Mutagen", 1, 34,
-                      message="Use the Quod Libet unstable PPAs/repos to get a newer "
-                              "mutagen version.")
+        message="Use the Quod Libet unstable PPAs/repos to get a newer "
+                "mutagen version.")
     GTK = Version("GTK+", 3, 18)
     PYGOBJECT = Version("PyGObject", 3, 18)
     GSTREAMER = Version("GStreamer", 1, 8)
