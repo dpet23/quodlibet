@@ -55,16 +55,17 @@ class Version(tuple):
 class MinVersions(object):
     """Dependency requirements for Quod Libet / Ex Falso"""
 
-    PYTHON3 = Version("Python3", 3, 6)
+    PYTHON2 = Version("Python2", 2, 7)
+    PYTHON3 = Version("Python3", 3, 5)
     MUTAGEN = Version("Mutagen", 1, 34,
-        message="Use the Quod Libet unstable PPAs/repos to get a newer "
-                "mutagen version.")
+                      message="Use the Quod Libet unstable PPAs/repos to get a newer "
+                              "mutagen version.")
     GTK = Version("GTK+", 3, 18)
     PYGOBJECT = Version("PyGObject", 3, 18)
     GSTREAMER = Version("GStreamer", 1, 8)
 
 
-VERSION_TUPLE = Version("", 4, 4, -1)
+VERSION_TUPLE = Version("", 4, 3, -1)
 VERSION = str(VERSION_TUPLE)
 
 # entry point for the user guide / wiki
