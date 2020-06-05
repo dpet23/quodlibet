@@ -2343,7 +2343,7 @@ msgstr "Stoppe Synchronisation"
 
 #: quodlibet/ext/events/synchronize_to_device.py:202
 msgid "Progress:"
-msgstr "Fortschritt"
+msgstr "Fortschritt:"
 
 #: quodlibet/ext/events/synchronize_to_device.py:205
 msgid "The following saved searches shall be synchronized:"
