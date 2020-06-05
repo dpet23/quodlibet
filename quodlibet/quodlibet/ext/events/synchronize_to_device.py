@@ -85,6 +85,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     if destination == '':
                         append(_("Destination path is empty, please provide "
                                  "it!"))
+                    elif len(selected_songs) == 0:
+                        append("No songs in the selected saved searches.")
                     else:
                         try:
                             append("Starting...")
