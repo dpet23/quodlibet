@@ -38,9 +38,9 @@ class ColumnModeSelection(Gtk.VBox):
 
         group = None
         mode_label = {
-                ColumnMode.SMALL: _("Small"),
-                ColumnMode.WIDE: _("Wide"),
-                ColumnMode.COLUMNAR: _("Columnar"),
+            ColumnMode.SMALL: _("Small"),
+            ColumnMode.WIDE: _("Wide"),
+            ColumnMode.COLUMNAR: _("Columnar"),
         }
         for mode in ColumnMode.values:
             lbl = mode_label[ColumnMode.value_of(mode)]
@@ -62,7 +62,7 @@ class ColumnModeSelection(Gtk.VBox):
             selected_mode = ColumnMode.WIDE
         if self.buttons[2].get_active():
             selected_mode = ColumnMode.COLUMNAR
-        config.set("browsers", "pane_mode", selected_mode)
+        config.set("browsers", "pane_mode", int(selected_mode))
         self.browser.set_all_column_mode(selected_mode)
 
 
@@ -211,8 +211,8 @@ class PreferencesButton(Gtk.HBox):
         menu.show_all()
 
         button = MenuButton(
-                SymbolicIconImage(Icons.EMBLEM_SYSTEM, Gtk.IconSize.MENU),
-                arrow=True)
+            SymbolicIconImage(Icons.EMBLEM_SYSTEM, Gtk.IconSize.MENU),
+            arrow=True)
         button.set_menu(menu)
         button.show()
         self.pack_start(button, True, True, 0)
@@ -232,7 +232,7 @@ class Preferences(qltk.UniqueWindow):
 
         vbox = Gtk.VBox(spacing=12)
 
-        column_modes = ColumnModes(browser)
+        column_modes = ColumnModeSelection(browser)
         column_mode_frame = qltk.Frame(_("Column layout"), child=column_modes)
 
         editor = PatternEditor()
