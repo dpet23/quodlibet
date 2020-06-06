@@ -26,9 +26,8 @@ from quodlibet.qltk.x import ScrolledWindow, Align
 from quodlibet.util.library import background_filter
 from quodlibet.util import connect_destroy
 from quodlibet.qltk.paned import ConfigMultiRHPaned
-from quodlibet.const import COLUMN_MODE_WIDE, COLUMN_MODE_COLUMNAR
 
-from .prefs import PreferencesButton
+from .prefs import PreferencesButton, ColumnMode
 from .util import get_headers
 from .pane import Pane
 
@@ -121,13 +120,13 @@ class PanedBrowser(Browser, util.InstanceTracker):
         hor = Gtk.Orientation.HORIZONTAL
         ver = Gtk.Orientation.VERTICAL
 
-        if mode == COLUMN_MODE_WIDE:
+        if mode == ColumnMode.WIDE:
             self.main_box.props.orientation = hor
             self.multi_paned.change_orientation(horizontal=False)
-        elif mode == COLUMN_MODE_COLUMNAR:
+        elif mode == ColumnMode.COLUMNAR:
             self.main_box.props.orientation = hor
             self.multi_paned.change_orientation(horizontal=True)
-        else:  # COLUMN_MODE_SMALL
+        else:  # ColumnMode.SMALL
             self.main_box.props.orientation = ver
             self.multi_paned.change_orientation(horizontal=True)
 
@@ -239,7 +238,8 @@ class PanedBrowser(Browser, util.InstanceTracker):
             tags = [t for t in p.tags if not t.startswith("~#")]
             self.__star.update(dict.fromkeys(tags))
 
-        self.set_column_mode(config.gettext("browsers", "pane_mode"))
+        self.set_column_mode(config.getint("browsers", "pane_mode",
+                                           ColumnMode.SMALL))
 
     def fill_panes(self):
         self._panes[-1].inhibit()
@@ -323,8 +323,6 @@ class PanedBrowser(Browser, util.InstanceTracker):
 
     def finalize(self, restored):
         config.settext("browsers", "query_text", u"")
-        if not restored:
-            self.fill_panes()
 
     def fill(self, songs):
         GLib.idle_add(self.songs_selected, list(songs))
