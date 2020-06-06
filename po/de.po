@@ -2311,6 +2311,48 @@ msgstr "Fehler beim Finden des Squeezebox-Servers"
 msgid "Error finding %s. Please check settings"
 msgstr "Fehler beim Finden von %s. Bitte überprüfen Sie die Einstellungen"
 
+#: quodlibet/ext/events/synchronize_to_device.py:28
+msgid "Synchronize to Device"
+msgstr "Mit Gerät synchronisieren"
+
+#: quodlibet/ext/events/synchronize_to_device.py:30
+msgid ""
+"Synchronizes all songs from the selected saved searches with the specified "
+"folder. All songs in that folder, which are not in the saved searches, will "
+"be deleted."
+msgstr ""
+"Synchronisiert alle Lieder der ausgewählten gespeicherten Suchen in den "
+"angegebenen Ordner. Alle Lieder / Dateien in diesem Ordner, die nicht in den "
+"gespeicherten Suchen sind, werden gelöscht."
+
+#: quodlibet/ext/events/synchronize_to_device.py:86
+msgid "Destination path is empty, please provide it!"
+msgstr "Ziel Pfad ist leer, bitte angeben!"
+
+#: quodlibet/ext/events/synchronize_to_device.py:182
+msgid "Destination path:"
+msgstr "Ziel Pfad:"
+
+#: quodlibet/ext/events/synchronize_to_device.py:186
+msgid "Start synchronization"
+msgstr "Starte Synchronisation"
+
+#: quodlibet/ext/events/synchronize_to_device.py:189
+msgid "Stop synchronization"
+msgstr "Stoppe Synchronisation"
+
+#: quodlibet/ext/events/synchronize_to_device.py:202
+msgid "Progress:"
+msgstr "Fortschritt:"
+
+#: quodlibet/ext/events/synchronize_to_device.py:205
+msgid "The following saved searches shall be synchronized:"
+msgstr "Die folgenden gespeicherten Suchen sollen synchronisiert werden:"
+
+#: quodlibet/ext/events/synchronize_to_device.py:209
+msgid "No saved searches yet, create some and come back!"
+msgstr "Noch keine gespeicherten Suchen, erstelle welche und komme dann zurück!"
+
 #: quodlibet/ext/events/synchronizedlyrics.py:34
 msgid "Synchronized Lyrics"
 msgstr "Synchronisierte Liedtexte"
