@@ -38,6 +38,7 @@ from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
 from quodlibet.util import print_d, print_e, print_exc
 from quodlibet.util.enum import enum
+from quodlibet.util.string.titlecase import human_title
 
 PLUGIN_CONFIG_SECTION = _('synchronize_to_device')
 
@@ -88,7 +89,7 @@ class Entry:
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ICON = Icons.NETWORK_TRANSMIT
     PLUGIN_ID = PLUGIN_CONFIG_SECTION
-    PLUGIN_NAME = PLUGIN_CONFIG_SECTION.replace('_', ' ').title()
+    PLUGIN_NAME = human_title(PLUGIN_CONFIG_SECTION.replace('_', ' '))
     PLUGIN_DESC = _('Synchronizes all songs from the selected saved searches '
                     'with the specified folder.')
 
@@ -113,6 +114,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                   'export': (3, str)}
 
     def PluginPreferences(self, parent):
+        # Check if the queries file exists
+        if not os.path.exists(self.path_query):
+            return self._no_queries_frame()
+
         # Read saved searches from file
         self.queries = {}
         with open(self.path_query, 'r', encoding='utf-8') as query_file:
@@ -121,8 +126,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 self.queries[name] = Query(query_string.strip())
         if not self.queries:
             # query_file is empty
-            return qltk.Frame(
-                _('No saved searches yet, create some and come back!'))
+            return self._no_queries_frame()
 
         main_vbox = Gtk.VBox(spacing=self.spacing_main)
         self.main_vbox = main_vbox
@@ -281,6 +285,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         main_vbox.pack_start(sync_vbox, False, False, 0)
 
         return main_vbox
+
+    @staticmethod
+    def _no_queries_frame():
+        """
+        Create a frame to use when there are no saved searches.
+
+        :return: A new Frame.
+        """
+        return qltk.Frame(
+            _('No saved searches yet, create some and come back!'))
 
     def _expandable_scroll(self, min_h=50, max_h=-1, expand=True):
         """
