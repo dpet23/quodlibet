@@ -9,10 +9,10 @@
 
 import os
 import re
+import shutil
 import unicodedata
 from math import floor, log10
 from pathlib import Path
-from shutil import copyfile
 
 from gi.repository import Gtk, GLib, Pango
 from senf import fsn2text
@@ -133,6 +133,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Saved search selection frame
         saved_search_vbox = Gtk.VBox(spacing=self.spacing_large)
+        self.saved_search_vbox = saved_search_vbox
         for query_name, query in self.queries.items():
             query_config = self.CONFIG_QUERY_PREFIX + query_name
             check_button = ConfigCheckButton(query_name, PM.CONFIG_SECTION,
@@ -164,12 +165,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Destination path information
         destination_warn_label = self._label_with_icon(
-            _("All pre-existing songs in the destination folder that aren't in "
+            _("All pre-existing files in the destination folder that aren't in "
               "the saved searches will be deleted."),
             Icons.DIALOG_WARNING)
         destination_info_label = self._label_with_icon(
-            _('For devices mounted with MTP, specify a local destination '
-              'folder and transfer it to your device with rsync.'),
+            _('For devices mounted with MTP, export to a local destination '
+              'folder, then transfer it to your device with rsync.'),
             Icons.DIALOG_INFORMATION)
 
         # Destination path frame
@@ -220,6 +221,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         details_scroll = self._expandable_scroll()
         details_scroll.set_shadow_type(Gtk.ShadowType.IN)
         details_scroll.add(details_tree)
+        self.renders = {}
 
         # Preview column: status
         render = Gtk.CellRendererText()
@@ -354,6 +356,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             tvc.set_sort_column_id(sort)
         tvc.set_cell_data_func(render, cdf)
         tvc.pack_start(render, True)
+        self.renders[tvc] = render
         return tvc
 
     def _destination_path_changed(self, entry):
@@ -949,7 +952,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 song_folders = os.path.dirname(expanded_path)
                 os.makedirs(song_folders, exist_ok=True)
                 try:
-                    copyfile(entry.filename, expanded_path)
+                    shutil.copyfile(entry.filename, expanded_path)
                 except Exception as ex:
                     entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                     self._update_model_value(iter_, 'tag', entry.tag)
