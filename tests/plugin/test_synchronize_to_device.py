@@ -8,7 +8,6 @@
 import os
 from os import makedirs
 from pathlib import Path
-from tests import skip
 from textwrap import dedent
 from unittest.mock import ANY, patch
 
@@ -29,8 +28,8 @@ QUERIES = {
                   'terms': ('/dev/null',), 'results': 5},
     '2 artists': {'query': 'artist=|("Group1","Group2")',
                   'terms': ('Group',), 'results': 4},
-    'Long songs': {'query': '#(length > 300)',
-                   'terms': (), 'results': 0},
+    'No songs': {'query': '#(length < 0)',
+                 'terms': (), 'results': 0},
     'Symbols': {'query': '~dirname="/tmp/new"',
                 'terms': ('/tmp/new',), 'results': 1}
 }
@@ -175,7 +174,7 @@ class TSyncToDevice(PluginTestCase):
         export = model[path][self.plugin._model_col_id('export')]
         self.assertTrue(
             any(export.startswith(export_path) for export_path in data[1]),
-            'Export path "{}" does not start with "{}" for {}'.format(export, data[1], filename))
+            'Export path "{}" does not start with "{}"'.format(export, data[1]))
 
         song = model[path][self.plugin._model_col_id('entry')]._song
         if song and data[2] and data[3]:
@@ -194,6 +193,16 @@ class TSyncToDevice(PluginTestCase):
         iter_ = self.plugin.model.get_iter(cell_id)
         return self.plugin.model.get_value(
             iter_, self.plugin._model_col_id(column))
+
+    def _model_remove_by_tag(self, rm_tag):
+        iter_ = self.plugin.model.get_iter_first()
+        while iter_:
+            entry_tag = self.plugin.model.get_value(
+                iter_, self.plugin._model_col_id('tag'))
+            if entry_tag == rm_tag:
+                self.plugin.model.remove(iter_)
+            else:
+                iter_ = self.plugin.model.iter_next(iter_)
 
     def _mark_song_unique(self, cell_edit, new_text='updated path', check=True):
         self._model_set_value('export', cell_edit, new_text)
@@ -297,10 +306,10 @@ class TSyncToDevice(PluginTestCase):
 
     @patch('quodlibet.qltk.ErrorMessage')
     def test_start_preview_no_searches_selected(self, mock_message):
+        self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
         mock_message.assert_called_once_with(
-            self.main_vbox, 'No destination path provided', ANY)
-        # TODO: change error message
+            self.main_vbox, 'No saved searches selected', ANY)
 
     @patch('quodlibet.qltk.ErrorMessage')
     def test_start_preview_no_destination_path(self, mock_message):
@@ -329,16 +338,15 @@ class TSyncToDevice(PluginTestCase):
         mock_message.assert_called_once_with(
             self.main_vbox, 'Export path is not absolute', ANY)
 
-    def test_start_preview_no_songs(self):
+    @patch('quodlibet.qltk.ErrorMessage')
+    def test_start_preview_no_songs(self, mock_message):
         self._make_library()
-
-        self._select_searches('Long songs')
+        self._select_searches('No songs')
         self.dest_entry.set_text(self.path_dest)
 
         self.plugin._start_preview(self.plugin.preview_start_button)
-        n_children = self.plugin.model.iter_n_children(None)
-        self.assertEqual(n_children, 0)
-        # TODO: show an error instead
+        mock_message.assert_called_once_with(
+            self.main_vbox, 'No songs in the selected saved searches', ANY)
 
     @patch('quodlibet.qltk.ErrorMessage')
     def test_start_preview_path_pattern_mismatch(self, mock_message):
@@ -474,10 +482,11 @@ class TSyncToDevice(PluginTestCase):
         self._make_library()
         num_files = self._make_files_for_deletion()
 
-        self._select_searches('Long songs')
+        self._select_searches('Symbols')
         self.dest_entry.set_text(self.path_dest)
 
         self.plugin._start_preview(self.plugin.preview_start_button)
+        self._model_remove_by_tag(self.Tags.PENDING_COPY)
 
         n_children = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children, num_files)
@@ -496,14 +505,14 @@ class TSyncToDevice(PluginTestCase):
         n_expected = QUERIES[query_name]['results'] + num_files
         self.assertEqual(n_children, n_expected)
 
-    @skip("FIXME: The first item in the pattern doesn't get cleaned")
     def test_start_preview_unicode_basic_latin(self):
         # Characters in the range 0x0021 - 0x007E
         self._make_library()
 
         query_name = 'Symbols'
         self._select_searches(query_name)
-        self.dest_entry.set_text(self.path_dest)
+        path_dest = os.path.join(self.path_dest, 'Привет')
+        self.dest_entry.set_text(path_dest)
         self.pattern_entry.set_text('<title>')
 
         self.plugin._start_preview(self.plugin.preview_start_button)
@@ -512,18 +521,18 @@ class TSyncToDevice(PluginTestCase):
         self.assertEqual(n_children, QUERIES[query_name]['results'])
 
         expected_value = r"Abc123 (~!@#$%^&_;_'_,._+=)"
-        expected = str(Path(self.path_dest, expected_value))
+        expected = str(Path(path_dest, expected_value))
         export = self._model_get_value(0, 'export')
         self.assertEqual(export, expected)
 
-    @skip("FIXME: The first item in the pattern doesn't get cleaned")
     def test_start_preview_unicode_various_languages(self):
         # Characters in: 0x00A0 - 0x04FF, 0x3040 - 0x309F, 0x0600 - 0x06FF
         self._make_library()
 
         query_name = 'Symbols'
         self._select_searches(query_name)
-        self.dest_entry.set_text(self.path_dest)
+        path_dest = os.path.join(self.path_dest, 'こんにちわ')
+        self.dest_entry.set_text(path_dest)
         self.pattern_entry.set_text('<artist>')
 
         self.plugin._start_preview(self.plugin.preview_start_button)
@@ -532,18 +541,18 @@ class TSyncToDevice(PluginTestCase):
         self.assertEqual(n_children, QUERIES[query_name]['results'])
 
         expected_value = r"[ÆAacEeoø] _ _ _ _"
-        expected = str(Path(self.path_dest, expected_value))
+        expected = str(Path(path_dest, expected_value))
         export = self._model_get_value(0, 'export')
         self.assertEqual(export, expected)
 
-    @skip("FIXME: The first item in the pattern doesn't get cleaned")
     def test_start_preview_unicode_other_symbols(self):
         # Characters in the range 0x2030 - 0x1F47E
         self._make_library()
 
         query_name = 'Symbols'
         self._select_searches(query_name)
-        self.dest_entry.set_text(self.path_dest)
+        path_dest = os.path.join(self.path_dest, 'مرحبا')
+        self.dest_entry.set_text(path_dest)
         self.pattern_entry.set_text('<album>')
 
         self.plugin._start_preview(self.plugin.preview_start_button)
@@ -552,7 +561,7 @@ class TSyncToDevice(PluginTestCase):
         self.assertEqual(n_children, QUERIES[query_name]['results'])
 
         expected_value = r"{_} _ A_B_3 _A _ _ _🤴 😀🎧 🪐👽🖖"
-        expected = str(Path(self.path_dest, expected_value))
+        expected = str(Path(path_dest, expected_value))
         export = self._model_get_value(0, 'export')
         self.assertEqual(export, expected)
 
@@ -673,9 +682,10 @@ class TSyncToDevice(PluginTestCase):
     def test_row_edited_delete_to_unique(self):
         self._make_library()
         self._make_files_for_deletion()
-        self._select_searches('Long songs')
+        self._select_searches('Symbols')
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
+        self._model_remove_by_tag(self.Tags.PENDING_COPY)
         cell_id_edit = 0
         old_c_songs_copy = self.plugin.c_songs_copy
         old_c_songs_delete = self.plugin.c_songs_delete
@@ -687,9 +697,10 @@ class TSyncToDevice(PluginTestCase):
     def test_row_edited_delete_to_duplicate(self):
         self._make_library()
         self._make_files_for_deletion()
-        self._select_searches('Long songs')
+        self._select_searches('Symbols')
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
+        self._model_remove_by_tag(self.Tags.PENDING_COPY)
         cell_id_edit = 0
         cell_id_copy = 1
         old_c_song_dupes = self.plugin.c_song_dupes
@@ -702,9 +713,10 @@ class TSyncToDevice(PluginTestCase):
     def test_row_edited_delete_to_delete(self):
         self._make_library()
         self._make_files_for_deletion()
-        self._select_searches('Long songs')
+        self._select_searches('Symbols')
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
+        self._model_remove_by_tag(self.Tags.PENDING_COPY)
         cell_id_edit = 0
         old_c_songs_delete = self.plugin.c_songs_delete
 
@@ -714,9 +726,10 @@ class TSyncToDevice(PluginTestCase):
     def test_row_edited_delete_to_empty(self):
         self._make_library()
         self._make_files_for_deletion()
-        self._select_searches('Long songs')
+        self._select_searches('Symbols')
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
+        self._model_remove_by_tag(self.Tags.PENDING_COPY)
         cell_id_edit = 0
         old_c_songs_delete = self.plugin.c_songs_delete
 
@@ -777,7 +790,6 @@ class TSyncToDevice(PluginTestCase):
         self.assertEqual(self._model_get_value(cell_id_duplicate, 'tag'),
                          self.Tags.PENDING_COPY)
 
-    @skip('FIXME: The last song is still marked as a duplicate')
     def test_row_edited_others_duplicate_to_unique_multiple(self):
         self._make_library()
         self._select_searches('Directory')
@@ -849,7 +861,7 @@ class TSyncToDevice(PluginTestCase):
     def test_start_sync_deletion(self, mock_mkdir, mock_cp, mock_rm):
         self._make_library()
         n_files = self._make_files_for_deletion()
-        query_name = 'Long songs'
+        query_name = 'Symbols'
         self._select_searches(query_name)
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
@@ -873,7 +885,7 @@ class TSyncToDevice(PluginTestCase):
         n_files = self._make_files_for_deletion('song1.mp3', 'song2.mp3',
             str(Path('other', 'file1.txt')), str(Path('other', 'file2.txt')))
         n_dirs = 1
-        query_name = 'Long songs'
+        query_name = 'Symbols'
         self._select_searches(query_name)
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)

@@ -550,6 +550,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             elif old_path_is_duplicate and new_path_is_unique:
                 _make_unique(entry, True)
                 entry.export_path = new_path
+                self.model.foreach(_update_other_song)
 
             # If the old path was unique...
             elif old_path_is_unique and new_path_is_empty:
@@ -652,6 +653,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Get a list containing all songs to export
         songs = self._get_songs_from_queries()
+        if not songs:
+            return False
         self.model.clear()
         self.c_songs_copy = self.c_song_dupes = self.c_songs_delete = 0
         export_paths = []
@@ -805,10 +808,20 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if self.config_get_bool(query_config):
                 enabled_queries.append(query)
 
+        if not enabled_queries:
+            self._show_sync_error(_('No saved searches selected'),
+                                  _('Please select at least one saved search.'))
+            return []
+
         selected_songs = []
         for song in app.library.itervalues():
             if any(query.search(song) for query in enabled_queries):
                 selected_songs.append(song)
+
+        if not selected_songs:
+            self._show_sync_error(_('No songs in the selected saved searches'),
+                                  _('All selected saved searches are empty.'))
+            return []
 
         print_d(_('Found {} songs to synchronize').format(len(selected_songs)))
         return selected_songs
@@ -854,10 +867,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Replace unsafe chars in each path component
         safe_parts = []
-        for i, component in enumerate(Path(safe_filename).parts):
-            if i > 0:
-                component = self.unsafe_filename_chars.sub('_', component)
-                component = re.sub('_{2,}', '_', component)
+        for component in Path(safe_filename).parts:
+            component = self.unsafe_filename_chars.sub('_', component)
+            component = re.sub('_{2,}', '_', component)
             safe_parts.append(component)
         safe_filename = os.path.join(*safe_parts)
 
