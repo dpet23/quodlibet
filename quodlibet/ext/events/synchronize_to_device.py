@@ -8,11 +8,10 @@
 # (at your option) any later version.
 
 import os
-import re
+import shutil
 import unicodedata
 from math import floor, log10
 from pathlib import Path
-from shutil import copyfile
 
 from gi.repository import Gtk, GLib, Pango
 from senf import fsn2text
@@ -38,6 +37,8 @@ from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
 from quodlibet.util import print_d, print_e, print_exc
 from quodlibet.util.enum import enum
+from quodlibet.util.path import strip_win32_incompat_from_path
+from quodlibet.util.string.titlecase import human_title
 
 PLUGIN_CONFIG_SECTION = _('synchronize_to_device')
 
@@ -88,7 +89,7 @@ class Entry:
 class SyncToDevice(EventPlugin, PluginConfigMixin):
     PLUGIN_ICON = Icons.NETWORK_TRANSMIT
     PLUGIN_ID = PLUGIN_CONFIG_SECTION
-    PLUGIN_NAME = PLUGIN_CONFIG_SECTION.replace('_', ' ').title()
+    PLUGIN_NAME = human_title(PLUGIN_CONFIG_SECTION.replace('_', ' '))
     PLUGIN_DESC = _('Synchronizes all songs from the selected saved searches '
                     'with the specified folder.')
 
@@ -104,8 +105,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     spacing_large = 6
     spacing_small = 3
 
-    default_export_pattern = os.path.join('<artist>', '<album>', '<title>')
-    unsafe_filename_chars = re.compile(r'[<>:"/\\|?*\u00FF-\uFFFF]')
+    default_export_pattern = os.path.join(
+        _('<artist>'), _('<album>'), _('<title>'))
 
     model_cols = {'entry': (0, object),
                   'tag': (1, str),
@@ -113,6 +114,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                   'export': (3, str)}
 
     def PluginPreferences(self, parent):
+        # Check if the queries file exists
+        if not os.path.exists(self.path_query):
+            return self._no_queries_frame()
+
         # Read saved searches from file
         self.queries = {}
         with open(self.path_query, 'r', encoding='utf-8') as query_file:
@@ -121,14 +126,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 self.queries[name] = Query(query_string.strip())
         if not self.queries:
             # query_file is empty
-            return qltk.Frame(
-                _('No saved searches yet, create some and come back!'))
+            return self._no_queries_frame()
 
         main_vbox = Gtk.VBox(spacing=self.spacing_main)
         self.main_vbox = main_vbox
 
         # Saved search selection frame
         saved_search_vbox = Gtk.VBox(spacing=self.spacing_large)
+        self.saved_search_vbox = saved_search_vbox
         for query_name, query in self.queries.items():
             query_config = self.CONFIG_QUERY_PREFIX + query_name
             check_button = ConfigCheckButton(query_name, PM.CONFIG_SECTION,
@@ -160,12 +165,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Destination path information
         destination_warn_label = self._label_with_icon(
-            _("All pre-existing songs in the destination folder that aren't in "
+            _("All pre-existing files in the destination folder that aren't in "
               "the saved searches will be deleted."),
             Icons.DIALOG_WARNING)
         destination_info_label = self._label_with_icon(
-            _('For devices mounted with MTP, specify a local destination '
-              'folder and transfer it to your device with rsync.'),
+            _('For devices mounted with MTP, export to a local destination '
+              'folder, then transfer it to your device with rsync.'),
             Icons.DIALOG_INFORMATION)
 
         # Destination path frame
@@ -216,6 +221,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         details_scroll = self._expandable_scroll()
         details_scroll.set_shadow_type(Gtk.ShadowType.IN)
         details_scroll.add(details_tree)
+        self.renders = {}
 
         # Preview column: status
         render = Gtk.CellRendererText()
@@ -282,6 +288,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         return main_vbox
 
+    @staticmethod
+    def _no_queries_frame():
+        """
+        Create a frame to use when there are no saved searches.
+
+        :return: A new Frame.
+        """
+        return qltk.Frame(
+            _('No saved searches yet, create some and come back!'))
+
     def _expandable_scroll(self, min_h=50, max_h=-1, expand=True):
         """
         Create a ScrolledWindow that expands as content is added.
@@ -340,6 +356,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             tvc.set_sort_column_id(sort)
         tvc.set_cell_data_func(render, cdf)
         tvc.pack_start(render, True)
+        self.renders[tvc] = render
         return tvc
 
     def _destination_path_changed(self, entry):
@@ -533,6 +550,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             elif old_path_is_duplicate and new_path_is_unique:
                 _make_unique(entry, True)
                 entry.export_path = new_path
+                self.model.foreach(_update_other_song)
 
             # If the old path was unique...
             elif old_path_is_unique and new_path_is_empty:
@@ -635,6 +653,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Get a list containing all songs to export
         songs = self._get_songs_from_queries()
+        if not songs:
+            return False
         self.model.clear()
         self.c_songs_copy = self.c_song_dupes = self.c_songs_delete = 0
         export_paths = []
@@ -788,10 +808,20 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if self.config_get_bool(query_config):
                 enabled_queries.append(query)
 
+        if not enabled_queries:
+            self._show_sync_error(_('No saved searches selected'),
+                                  _('Please select at least one saved search.'))
+            return []
+
         selected_songs = []
         for song in app.library.itervalues():
             if any(query.search(song) for query in enabled_queries):
                 selected_songs.append(song)
+
+        if not selected_songs:
+            self._show_sync_error(_('No songs in the selected saved searches'),
+                                  _('All selected saved searches are empty.'))
+            return []
 
         print_d(_('Found {} songs to synchronize').format(len(selected_songs)))
         return selected_songs
@@ -835,14 +865,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         safe_filename = u''.join(
             [c for c in safe_filename if not unicodedata.combining(c)])
 
-        # Replace unsafe chars in each path component
-        safe_parts = []
-        for i, component in enumerate(Path(safe_filename).parts):
-            if i > 0:
-                component = self.unsafe_filename_chars.sub('_', component)
-                component = re.sub('_{2,}', '_', component)
-            safe_parts.append(component)
-        safe_filename = os.path.join(*safe_parts)
+        if os.name != "nt":
+            # Ensure that Win32-incompatible chars are always removed.
+            # On Windows, this is called during `FileFromPattern`.
+            safe_filename = strip_win32_incompat_from_path(safe_filename)
 
         return safe_filename
 
@@ -935,7 +961,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 song_folders = os.path.dirname(expanded_path)
                 os.makedirs(song_folders, exist_ok=True)
                 try:
-                    copyfile(entry.filename, expanded_path)
+                    shutil.copyfile(entry.filename, expanded_path)
                 except Exception as ex:
                     entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                     self._update_model_value(iter_, 'tag', entry.tag)
