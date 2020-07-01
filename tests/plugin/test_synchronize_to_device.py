@@ -825,6 +825,7 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_sync(self.plugin.sync_start_button)
 
+        self.assertEqual(self.plugin.c_files_copy, n_songs)
         self.assertEqual(mock_mkdir.call_count, n_songs)
         self.assertEqual(mock_cp.call_count, n_songs)
         self.assertEqual(mock_rm.call_count, 0)
@@ -848,8 +849,12 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_sync(self.plugin.sync_start_button)
 
-        self.assertEqual(mock_mkdir.call_count, 1)
-        self.assertEqual(mock_cp.call_count, 1)
+        expected_sync = 1
+        expected_skip = n_songs - expected_sync
+        self.assertEqual(self.plugin.c_files_copy, expected_sync)
+        self.assertEqual(self.plugin.c_files_dupes, expected_skip)
+        self.assertEqual(mock_mkdir.call_count, expected_sync)
+        self.assertEqual(mock_cp.call_count, expected_sync)
         self.assertEqual(mock_rm.call_count, 0)
         self.plugin.model.foreach(self._verify_child,
             [self.Tags.RESULT_SUCCESS, self.Tags.SKIP_DUPLICATE],
@@ -869,6 +874,8 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_sync(self.plugin.sync_start_button)
 
+        self.assertEqual(self.plugin.c_files_copy, n_songs)
+        self.assertEqual(self.plugin.c_files_delete, n_files)
         self.assertEqual(mock_mkdir.call_count, n_songs)
         self.assertEqual(mock_cp.call_count, n_songs)
         self.assertEqual(mock_rm.call_count, n_files)
@@ -895,6 +902,8 @@ class TSyncToDevice(PluginTestCase):
 
         n_children_updated = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children_updated, n_songs + n_files + n_dirs)
+        self.assertEqual(self.plugin.c_files_copy, n_songs)
+        self.assertEqual(self.plugin.c_files_delete, n_files + n_dirs)
         self.assertEqual(mkdir.call_count, n_songs)
         self.assertEqual(cp.call_count, n_songs)
         self.assertEqual(rm.call_count, n_files)
@@ -921,6 +930,7 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_sync(self.plugin.sync_start_button)
 
+        self.assertEqual(self.plugin.c_files_failed, n_total)
         self.assertEqual(mock_mkdir.call_count, n_songs)
         self.assertEqual(mock_cp.call_count, n_songs)
         self.assertEqual(mock_rm.call_count, n_files)
@@ -945,6 +955,8 @@ class TSyncToDevice(PluginTestCase):
         n_songs = 0
         for query in queries:
             n_songs += QUERIES[query]['results']
+        n_songs_duplicate = 1
+        n_songs_existing = 1
         n_total = n_songs + n_files
 
         n_children = self.plugin.model.iter_n_children(None)
@@ -954,11 +966,71 @@ class TSyncToDevice(PluginTestCase):
 
         n_children_updated = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children_updated, n_children + n_dirs)
-        self.assertEqual(mkdir.call_count, n_songs - 2)
-        self.assertEqual(cp.call_count, n_songs - 2)
+        n_expected_songs = n_songs - n_songs_duplicate - n_songs_existing
+        self.assertEqual(self.plugin.c_files_copy, n_expected_songs)
+        self.assertEqual(self.plugin.c_files_skip, n_songs_existing)
+        self.assertEqual(self.plugin.c_files_dupes, n_songs_duplicate)
+        self.assertEqual(self.plugin.c_files_delete, n_files + n_dirs)
+        self.assertEqual(mkdir.call_count, n_expected_songs)
+        self.assertEqual(cp.call_count, n_expected_songs)
         self.assertEqual(rm.call_count, n_files)
         self.assertEqual(rmdir.call_count, n_dirs)
         self.plugin.model.foreach(self._verify_child,
             [self.Tags.RESULT_SUCCESS, self.Tags.SKIP_DUPLICATE,
              self.Tags.RESULT_SKIP_EXISTING], [self.path_dest, ''],
             None, None)
+
+    @patch('os.remove')
+    @patch('shutil.copyfile')
+    @patch('os.makedirs')
+    def test_start_sync_twice(self, mock_mkdir, mock_cp, mock_rm):
+        self._make_library()
+        query_name = 'Directory'
+        self._select_searches(query_name)
+        self.dest_entry.set_text(self.path_dest)
+        self.plugin._start_preview(self.plugin.preview_start_button)
+        n_songs = QUERIES[query_name]['results']
+
+        self.plugin._start_sync(self.plugin.sync_start_button)
+        self.assertEqual(self.plugin.c_files_copy, n_songs)
+        self.assertEqual(mock_mkdir.call_count, n_songs)
+        self.assertEqual(mock_cp.call_count, n_songs)
+        self.assertEqual(mock_rm.call_count, 0)
+
+        mock_mkdir.reset_mock()
+        mock_cp.reset_mock()
+        mock_rm.reset_mock()
+
+        self.plugin._start_sync(self.plugin.sync_start_button)
+        self.assertEqual(self.plugin.c_files_skip_other, n_songs)
+        self.assertEqual(mock_mkdir.call_count, 0)
+        self.assertEqual(mock_cp.call_count, 0)
+        self.assertEqual(mock_rm.call_count, 0)
+
+    @patch('os.remove')
+    @patch('shutil.copyfile')
+    @patch('os.makedirs')
+    def test_preview_sync_twice(self, mock_mkdir, mock_cp, mock_rm):
+        self._make_library()
+        query_name = 'Directory'
+        self._select_searches(query_name)
+        self.dest_entry.set_text(self.path_dest)
+        n_songs = QUERIES[query_name]['results']
+
+        self.plugin._start_preview(self.plugin.preview_start_button)
+        self.plugin._start_sync(self.plugin.sync_start_button)
+        self.assertEqual(self.plugin.c_files_copy, n_songs)
+        self.assertEqual(mock_mkdir.call_count, n_songs)
+        self.assertEqual(mock_cp.call_count, n_songs)
+        self.assertEqual(mock_rm.call_count, 0)
+
+        mock_mkdir.reset_mock()
+        mock_cp.reset_mock()
+        mock_rm.reset_mock()
+
+        self.plugin._start_preview(self.plugin.preview_start_button)
+        self.plugin._start_sync(self.plugin.sync_start_button)
+        self.assertEqual(self.plugin.c_files_copy, n_songs)
+        self.assertEqual(mock_mkdir.call_count, n_songs)
+        self.assertEqual(mock_cp.call_count, n_songs)
+        self.assertEqual(mock_rm.call_count, 0)

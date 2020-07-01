@@ -709,7 +709,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if self.c_songs_copy > 0:
             counter = self.c_songs_copy
             preview_summary.append(
-                _('write {} {}')\
+                _('attempt to write {} {}')\
                 .format(counter, ngt('file', 'files', counter)))
 
         if self.c_song_dupes > 0:
@@ -923,6 +923,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :return: Whether the synchronization was successful.
         """
+        self.c_files_copy = self.c_files_skip = self.c_files_skip_other \
+            = self.c_files_dupes = self.c_files_delete = self.c_files_failed = 0
         self.model.foreach(self._sync_entry)
         if not self.running:
             return False
@@ -957,6 +959,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if os.path.exists(expanded_path):
                 entry.tag = Entry.Tags.RESULT_SKIP_EXISTING
                 self._update_model_value(iter_, 'tag', entry.tag)
+                self.c_files_skip += 1
             else:
                 entry.tag = Entry.Tags.IN_PROGRESS_SYNC
                 self._update_model_value(iter_, 'tag', entry.tag)
@@ -969,9 +972,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                     self._update_model_value(iter_, 'tag', entry.tag)
                     print_exc()
+                    self.c_files_failed += 1
                 else:
                     entry.tag = Entry.Tags.RESULT_SUCCESS
                     self._update_model_value(iter_, 'tag', entry.tag)
+                    self.c_files_copy += 1
+
+        elif entry.tag == Entry.Tags.SKIP_DUPLICATE:
+            self.c_files_dupes += 1
 
         elif entry.tag == Entry.Tags.PENDING_DELETE:
             # Delete file
@@ -984,10 +992,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                 self._update_model_value(iter_, 'tag', entry.tag)
                 print_exc()
+                self.c_files_failed += 1
             else:
                 entry.tag = Entry.Tags.RESULT_SUCCESS
                 self._update_model_value(iter_, 'tag', entry.tag)
+                self.c_files_delete += 1
 
+        else:
+            self.c_files_skip_other += 1
+
+        self._update_sync_summary()
         return False
 
     def _remove_empty_dirs(self):
@@ -1003,12 +1017,68 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     entry.tag = Entry.Tags.IN_PROGRESS_DELETE
                     iter_ = self.model.append(row=self._make_model_row(entry))
                     print_d(_('Removing "{}"').format(entry.filename))
+                    self.c_songs_delete += 1
                     try:
                         os.rmdir(dir_path)
                     except Exception as ex:
                         entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                         self._update_model_value(iter_, 'tag', entry.tag)
                         print_exc()
+                        self.c_files_failed += 1
                     else:
                         entry.tag = Entry.Tags.RESULT_SUCCESS
                         self._update_model_value(iter_, 'tag', entry.tag)
+                        self.c_files_delete += 1
+                    self._update_sync_summary()
+
+    def _update_sync_summary(self):
+        """
+        Update the synchronization summary text field.
+        """
+        sync_summary_prefix = _('Synchronization has:  ')
+        sync_summary = []
+
+        if self.c_files_copy > 0 or self.c_files_skip > 0:
+            text = []
+
+            counter = self.c_files_copy
+            text.append(
+                _('written {}/{} {}')\
+                .format(counter, self.c_songs_copy, ngt('file', 'files', counter)))
+
+            if self.c_files_skip > 0:
+                counter = self.c_files_skip
+                text.append(
+                    _('(skipped {} existing {})')\
+                    .format(counter, ngt('file', 'files', counter)))
+
+            sync_summary.append('  '.join(text))
+
+        if self.c_files_dupes > 0:
+            counter = self.c_files_dupes
+            sync_summary.append(
+                _('skipped {}/{} duplicate {}')\
+                .format(counter, self.c_song_dupes, ngt('file', 'files', counter)))
+
+        if self.c_files_delete > 0:
+            counter = self.c_files_delete
+            sync_summary.append(
+                _('deleted {}/{} {}')\
+                .format(counter, self.c_songs_delete, ngt('file', 'files', counter)))
+
+        if self.c_files_failed > 0:
+            counter = self.c_files_failed
+            sync_summary.append(
+                _('failed to sync {} {}')\
+                .format(counter, ngt('file', 'files', counter)))
+
+        if self.c_files_skip_other > 0:
+            counter = self.c_files_skip_other
+            sync_summary.append(
+                _('skipped {} {}')\
+                .format(counter, ngt('file', 'files', counter)))
+
+        sync_summary_text = ',  '.join(sync_summary)
+        sync_summary_text = sync_summary_prefix + sync_summary_text
+        self.prvw_summary_label.set_label(sync_summary_text)
+        print_d(sync_summary_text)
