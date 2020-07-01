@@ -427,13 +427,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         cell.set_property('text', model[iter_][self._model_col_id('export')])
 
-    def _row_edited(self, renderer, path, new_path):
+    def _row_edited(self, renderer, path, entered_path):
         """
         Handle a manual edit of a previewed export path.
 
-        :param renderer: The object which received the signal.
-        :param path:     The path identifying the edited cell.
-        :param new_path: The new path entered by the user.
+        :param renderer:        The object which received the signal.
+        :param path:            The path identifying the edited cell.
+        :param entered_path:    The new path entered by the user.
         """
 
         def _make_duplicate(entry, old_unique):
@@ -472,12 +472,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     or model_entry.tag == Entry.Tags.DELETE \
                     or model_entry.export_path == '':
                 pass
-            elif model_entry.export_path == new_path \
+            elif model_entry.export_path == entered_path \
                     and model_entry.tag == Entry.Tags.PENDING_COPY:
                 _make_duplicate(model_entry, True)
                 self._update_model_value(iter_, 'tag', model_entry.tag)
             elif model_entry.tag == Entry.Tags.SKIP_DUPLICATE \
-                    and model_entry.export_path != new_path \
+                    and model_entry.export_path != entered_path \
                     and self._get_paths()[model_entry.export_path] == 1:
                 _make_unique(model_entry, True)
                 self._update_model_value(iter_, 'tag', model_entry.tag)
@@ -485,35 +485,38 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         path = Gtk.TreePath.new_from_string(path)
         entry = self.model[path][self._model_col_id('entry')]
-        if entry.export_path != new_path:
+        if entry.export_path != entered_path:
+            old_path, new_path = {}, {}
 
-            old_path_is_duplicate = entry.tag == Entry.Tags.SKIP_DUPLICATE
-            old_path_is_delete = entry.tag == Entry.Tags.PENDING_DELETE
-            old_path_is_empty = not entry.export_path and not old_path_is_delete
-            old_path_is_unique = not (old_path_is_duplicate
-                                      or old_path_is_delete
-                                      or old_path_is_empty)
+            old_path['duplicate'] = entry.tag == Entry.Tags.SKIP_DUPLICATE
+            old_path['delete'] = entry.tag == Entry.Tags.PENDING_DELETE
+            old_path['empty'] = not entry.export_path and not old_path['delete']
+            old_path['unique'] = not (old_path['duplicate']
+                                      or old_path['delete']
+                                      or old_path['empty'])
+            old_path_inv = {}
+            for key, value in old_path.items():
+                old_path_inv.setdefault(value, []).append(key)
 
             previewed_paths = self._get_paths().keys()
 
-            new_path_is_duplicate = new_path in previewed_paths
-            new_path_is_delete = new_path.lower() == Entry.Tags.DELETE
-            new_path_is_empty = not new_path and not new_path_is_delete
-            new_path_is_unique = not (new_path_is_duplicate
-                                      or new_path_is_delete
-                                      or new_path_is_empty)
+            new_path['duplicate'] = entered_path in previewed_paths
+            new_path['delete'] = entered_path.lower() == Entry.Tags.DELETE
+            new_path['empty'] = not entered_path and not new_path['delete']
+            new_path['unique'] = not (new_path['duplicate']
+                                      or new_path['delete']
+                                      or new_path['empty'])
+            new_path_inv = {}
+            for key, value in new_path.items():
+                new_path_inv.setdefault(value, []).append(key)
 
-            print_d(_('\tFilename: {}\n\tOld path: {}\n\tNew path: {}')\
-                    .format(entry.filename, {'U':old_path_is_unique,
-                            'D':old_path_is_duplicate, 'Del':old_path_is_delete,
-                            'E':old_path_is_empty}, {'U':new_path_is_unique,
-                            'D':new_path_is_duplicate, 'Del':new_path_is_delete,
-                            'E':new_path_is_empty}))
+            print_d(_('\tFilename: {}\n\t\t{} -> {}'.format(entry.filename,
+                ' '.join(old_path_inv[True]), ' '.join(new_path_inv[True]))))
 
             # If the old path was empty...
-            if old_path_is_empty and new_path_is_empty:
+            if old_path['empty'] and new_path['empty']:
                 pass
-            elif old_path_is_empty and new_path_is_delete:
+            elif old_path['empty'] and new_path['delete']:
                 try:
                     print_d(_('Make delete: {}').format(entry.filename))
                     Path(entry.filename).relative_to(self.expanded_destination)
@@ -521,49 +524,49 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     self.c_songs_delete += 1
                 except ValueError:
                     pass
-            elif old_path_is_empty and new_path_is_duplicate:
+            elif old_path['empty'] and new_path['duplicate']:
                 _make_duplicate(entry, False)
-                entry.export_path = new_path
-            elif old_path_is_empty and new_path_is_unique:
+                entry.export_path = entered_path
+            elif old_path['empty'] and new_path['unique']:
                 _make_unique(entry, False)
-                entry.export_path = new_path
+                entry.export_path = entered_path
 
             # If the old path was a deletion...
-            elif old_path_is_delete and new_path_is_empty:
+            elif old_path['delete'] and new_path['empty']:
                 pass
-            elif old_path_is_delete and new_path_is_delete:
+            elif old_path['delete'] and new_path['delete']:
                 self.c_songs_delete = _make_skip(entry, self.c_songs_delete)
-            elif old_path_is_delete and new_path_is_duplicate:
+            elif old_path['delete'] and new_path['duplicate']:
                 pass
-            elif old_path_is_delete and new_path_is_unique:
+            elif old_path['delete'] and new_path['unique']:
                 pass
 
             # If the old path was a duplicate...
-            elif old_path_is_duplicate and new_path_is_empty:
+            elif old_path['duplicate'] and new_path['empty']:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_duplicate and new_path_is_delete:
+            elif old_path['duplicate'] and new_path['delete']:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_duplicate and new_path_is_duplicate:
-                entry.export_path = new_path
-            elif old_path_is_duplicate and new_path_is_unique:
+            elif old_path['duplicate'] and new_path['duplicate']:
+                entry.export_path = entered_path
+            elif old_path['duplicate'] and new_path['unique']:
                 _make_unique(entry, True)
-                entry.export_path = new_path
+                entry.export_path = entered_path
                 self.model.foreach(_update_other_song)
 
             # If the old path was unique...
-            elif old_path_is_unique and new_path_is_empty:
+            elif old_path['unique'] and new_path['empty']:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_unique and new_path_is_delete:
+            elif old_path['unique'] and new_path['delete']:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_unique and new_path_is_duplicate:
+            elif old_path['unique'] and new_path['duplicate']:
                 _make_duplicate(entry, True)
-                entry.export_path = new_path
-            elif old_path_is_unique and new_path_is_unique:
-                entry.export_path = new_path
+                entry.export_path = entered_path
+            elif old_path['unique'] and new_path['unique']:
+                entry.export_path = entered_path
                 self.model.foreach(_update_other_song)
 
             # Update the model and the summary field
