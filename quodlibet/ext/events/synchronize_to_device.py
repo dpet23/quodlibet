@@ -10,10 +10,9 @@
 import os
 import shutil
 import unicodedata
-from math import floor, log10
 from pathlib import Path
 
-from gi.repository import Gtk, GLib, Pango
+from gi.repository import Gtk, Pango
 from senf import fsn2text
 
 from quodlibet import _
@@ -28,12 +27,9 @@ from quodlibet.plugins import PM
 from quodlibet.plugins import PluginConfigMixin
 from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
-from quodlibet.qltk import Window
 from quodlibet.qltk.cbes import ComboBoxEntrySave
 from quodlibet.qltk.ccb import ConfigCheckButton
-from quodlibet.qltk.models import ObjectStore
 from quodlibet.qltk.views import HintedTreeView
-from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
 from quodlibet.util import print_d, print_e, print_exc
 from quodlibet.util.enum import enum
@@ -427,13 +423,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         cell.set_property('text', model[iter_][self._model_col_id('export')])
 
-    def _row_edited(self, renderer, path, new_path):
+    def _row_edited(self, renderer, path, entered_path):
         """
         Handle a manual edit of a previewed export path.
 
-        :param renderer: The object which received the signal.
-        :param path:     The path identifying the edited cell.
-        :param new_path: The new path entered by the user.
+        :param renderer:        The object which received the signal.
+        :param path:            The path identifying the edited cell.
+        :param entered_path:    The new path entered by the user.
         """
 
         def _make_duplicate(entry, old_unique):
@@ -472,12 +468,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     or model_entry.tag == Entry.Tags.DELETE \
                     or model_entry.export_path == '':
                 pass
-            elif model_entry.export_path == new_path \
+            elif model_entry.export_path == entered_path \
                     and model_entry.tag == Entry.Tags.PENDING_COPY:
                 _make_duplicate(model_entry, True)
                 self._update_model_value(iter_, 'tag', model_entry.tag)
             elif model_entry.tag == Entry.Tags.SKIP_DUPLICATE \
-                    and model_entry.export_path != new_path \
+                    and model_entry.export_path != entered_path \
                     and self._get_paths()[model_entry.export_path] == 1:
                 _make_unique(model_entry, True)
                 self._update_model_value(iter_, 'tag', model_entry.tag)
@@ -485,35 +481,38 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         path = Gtk.TreePath.new_from_string(path)
         entry = self.model[path][self._model_col_id('entry')]
-        if entry.export_path != new_path:
+        if entry.export_path != entered_path:
+            old_path, new_path = {}, {}
 
-            old_path_is_duplicate = entry.tag == Entry.Tags.SKIP_DUPLICATE
-            old_path_is_delete = entry.tag == Entry.Tags.PENDING_DELETE
-            old_path_is_empty = not entry.export_path and not old_path_is_delete
-            old_path_is_unique = not (old_path_is_duplicate
-                                      or old_path_is_delete
-                                      or old_path_is_empty)
+            old_path['duplicate'] = entry.tag == Entry.Tags.SKIP_DUPLICATE
+            old_path['delete'] = entry.tag == Entry.Tags.PENDING_DELETE
+            old_path['empty'] = not entry.export_path and not old_path['delete']
+            old_path['unique'] = not (old_path['duplicate']
+                                      or old_path['delete']
+                                      or old_path['empty'])
+            old_path_inv = {}
+            for key, value in old_path.items():
+                old_path_inv.setdefault(value, []).append(key)
 
             previewed_paths = self._get_paths().keys()
 
-            new_path_is_duplicate = new_path in previewed_paths
-            new_path_is_delete = new_path.lower() == Entry.Tags.DELETE
-            new_path_is_empty = not new_path and not new_path_is_delete
-            new_path_is_unique = not (new_path_is_duplicate
-                                      or new_path_is_delete
-                                      or new_path_is_empty)
+            new_path['duplicate'] = entered_path in previewed_paths
+            new_path['delete'] = entered_path.lower() == Entry.Tags.DELETE
+            new_path['empty'] = not entered_path and not new_path['delete']
+            new_path['unique'] = not (new_path['duplicate']
+                                      or new_path['delete']
+                                      or new_path['empty'])
+            new_path_inv = {}
+            for key, value in new_path.items():
+                new_path_inv.setdefault(value, []).append(key)
 
-            print_d(_('\tFilename: {}\n\tOld path: {}\n\tNew path: {}')\
-                    .format(entry.filename, {'U':old_path_is_unique,
-                            'D':old_path_is_duplicate, 'Del':old_path_is_delete,
-                            'E':old_path_is_empty}, {'U':new_path_is_unique,
-                            'D':new_path_is_duplicate, 'Del':new_path_is_delete,
-                            'E':new_path_is_empty}))
+            print_d(_('\tFilename: {}\n\t\t{} -> {}'.format(entry.filename,
+                ' '.join(old_path_inv[True]), ' '.join(new_path_inv[True]))))
 
             # If the old path was empty...
-            if old_path_is_empty and new_path_is_empty:
+            if old_path['empty'] and new_path['empty']:
                 pass
-            elif old_path_is_empty and new_path_is_delete:
+            elif old_path['empty'] and new_path['delete']:
                 try:
                     print_d(_('Make delete: {}').format(entry.filename))
                     Path(entry.filename).relative_to(self.expanded_destination)
@@ -521,49 +520,49 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     self.c_songs_delete += 1
                 except ValueError:
                     pass
-            elif old_path_is_empty and new_path_is_duplicate:
+            elif old_path['empty'] and new_path['duplicate']:
                 _make_duplicate(entry, False)
-                entry.export_path = new_path
-            elif old_path_is_empty and new_path_is_unique:
+                entry.export_path = entered_path
+            elif old_path['empty'] and new_path['unique']:
                 _make_unique(entry, False)
-                entry.export_path = new_path
+                entry.export_path = entered_path
 
             # If the old path was a deletion...
-            elif old_path_is_delete and new_path_is_empty:
+            elif old_path['delete'] and new_path['empty']:
                 pass
-            elif old_path_is_delete and new_path_is_delete:
+            elif old_path['delete'] and new_path['delete']:
                 self.c_songs_delete = _make_skip(entry, self.c_songs_delete)
-            elif old_path_is_delete and new_path_is_duplicate:
+            elif old_path['delete'] and new_path['duplicate']:
                 pass
-            elif old_path_is_delete and new_path_is_unique:
+            elif old_path['delete'] and new_path['unique']:
                 pass
 
             # If the old path was a duplicate...
-            elif old_path_is_duplicate and new_path_is_empty:
+            elif old_path['duplicate'] and new_path['empty']:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_duplicate and new_path_is_delete:
+            elif old_path['duplicate'] and new_path['delete']:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_duplicate and new_path_is_duplicate:
-                entry.export_path = new_path
-            elif old_path_is_duplicate and new_path_is_unique:
+            elif old_path['duplicate'] and new_path['duplicate']:
+                entry.export_path = entered_path
+            elif old_path['duplicate'] and new_path['unique']:
                 _make_unique(entry, True)
-                entry.export_path = new_path
+                entry.export_path = entered_path
                 self.model.foreach(_update_other_song)
 
             # If the old path was unique...
-            elif old_path_is_unique and new_path_is_empty:
+            elif old_path['unique'] and new_path['empty']:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_unique and new_path_is_delete:
+            elif old_path['unique'] and new_path['delete']:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
-            elif old_path_is_unique and new_path_is_duplicate:
+            elif old_path['unique'] and new_path['duplicate']:
                 _make_duplicate(entry, True)
-                entry.export_path = new_path
-            elif old_path_is_unique and new_path_is_unique:
-                entry.export_path = new_path
+                entry.export_path = entered_path
+            elif old_path['unique'] and new_path['unique']:
+                entry.export_path = entered_path
                 self.model.foreach(_update_other_song)
 
             # Update the model and the summary field
@@ -708,20 +707,20 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         if self.c_songs_copy > 0:
             counter = self.c_songs_copy
-            preview_summary.append(
-                _('write {} {}')\
+            preview_progress.append(
+                _('attempt to write {} {}')
                 .format(counter, ngt('file', 'files', counter)))
 
         if self.c_song_dupes > 0:
             counter = self.c_song_dupes
-            preview_summary.append(
-                _('skip {} duplicate {}')\
+            preview_progress.append(
+                _('skip {} duplicate {}')
                 .format(counter, ngt('file', 'files', counter)))
 
         if self.c_songs_delete > 0:
             counter = self.c_songs_delete
-            preview_summary.append(
-                _('delete {} {}')\
+            preview_progress.append(
+                _('delete {} {}')
                 .format(counter, ngt('file', 'files', counter)))
 
         preview_summary_text = ',  '.join(preview_summary)
@@ -920,6 +919,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :return: Whether the synchronization was successful.
         """
+        self.c_files_copy = self.c_files_skip = self.c_files_skip_other \
+            = self.c_files_dupes = self.c_files_delete = self.c_files_failed = 0
         self.model.foreach(self._sync_entry)
         if not self.running:
             return False
@@ -954,6 +955,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             if os.path.exists(expanded_path):
                 entry.tag = Entry.Tags.RESULT_SKIP_EXISTING
                 self._update_model_value(iter_, 'tag', entry.tag)
+                self.c_files_skip += 1
             else:
                 entry.tag = Entry.Tags.IN_PROGRESS_SYNC
                 self._update_model_value(iter_, 'tag', entry.tag)
@@ -966,9 +968,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                     self._update_model_value(iter_, 'tag', entry.tag)
                     print_exc()
+                    self.c_files_failed += 1
                 else:
                     entry.tag = Entry.Tags.RESULT_SUCCESS
                     self._update_model_value(iter_, 'tag', entry.tag)
+                    self.c_files_copy += 1
+
+        elif entry.tag == Entry.Tags.SKIP_DUPLICATE:
+            self.c_files_dupes += 1
 
         elif entry.tag == Entry.Tags.PENDING_DELETE:
             # Delete file
@@ -981,10 +988,16 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                 self._update_model_value(iter_, 'tag', entry.tag)
                 print_exc()
+                self.c_files_failed += 1
             else:
                 entry.tag = Entry.Tags.RESULT_SUCCESS
                 self._update_model_value(iter_, 'tag', entry.tag)
+                self.c_files_delete += 1
 
+        else:
+            self.c_files_skip_other += 1
+
+        self._update_sync_summary()
         return False
 
     def _remove_empty_dirs(self):
@@ -1000,12 +1013,71 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     entry.tag = Entry.Tags.IN_PROGRESS_DELETE
                     iter_ = self.model.append(row=self._make_model_row(entry))
                     print_d(_('Removing "{}"').format(entry.filename))
+                    self.c_songs_delete += 1
                     try:
                         os.rmdir(dir_path)
                     except Exception as ex:
                         entry.tag = Entry.Tags.RESULT_FAILURE + ': ' + str(ex)
                         self._update_model_value(iter_, 'tag', entry.tag)
                         print_exc()
+                        self.c_files_failed += 1
                     else:
                         entry.tag = Entry.Tags.RESULT_SUCCESS
                         self._update_model_value(iter_, 'tag', entry.tag)
+                        self.c_files_delete += 1
+                    self._update_sync_summary()
+
+    def _update_sync_summary(self):
+        """
+        Update the synchronization summary text field.
+        """
+        sync_summary_prefix = _('Synchronization has:  ')
+        sync_summary = []
+
+        if self.c_files_copy > 0 or self.c_files_skip > 0:
+            text = []
+
+            counter = self.c_files_copy
+            text.append(
+                _('written {}/{} {}')
+                .format(counter, self.c_songs_copy,
+                        ngt('file', 'files', counter)))
+
+            if self.c_files_skip > 0:
+                counter = self.c_files_skip
+                text.append(
+                    _('(skipped {} existing {})')
+                    .format(counter, ngt('file', 'files', counter)))
+
+            sync_summary.append('  '.join(text))
+
+        if self.c_files_dupes > 0:
+            counter = self.c_files_dupes
+            sync_summary.append(
+                _('skipped {}/{} duplicate {}')
+                .format(counter, self.c_song_dupes,
+                        ngt('file', 'files', counter)))
+
+        if self.c_files_delete > 0:
+            counter = self.c_files_delete
+            sync_summary.append(
+                _('deleted {}/{} {}')
+                .format(counter, self.c_songs_delete,
+                        ngt('file', 'files', counter)))
+
+        if self.c_files_failed > 0:
+            counter = self.c_files_failed
+            sync_summary.append(
+                _('failed to sync {} {}')
+                .format(counter, ngt('file', 'files', counter)))
+
+        if self.c_files_skip_other > 0:
+            counter = self.c_files_skip_other
+            sync_summary.append(
+                _('skipped {} {} synchronized previously')
+                .format(counter, ngt('file', 'files', counter)))
+
+        sync_summary_text = ',  '.join(sync_summary)
+        sync_summary_text = sync_summary_prefix + sync_summary_text
+        self.prvw_summary_label.set_label(sync_summary_text)
+        print_d(sync_summary_text)
