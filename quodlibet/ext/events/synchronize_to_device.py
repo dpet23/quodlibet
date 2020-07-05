@@ -242,22 +242,28 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                         sort=self._model_col_id('export'))
         details_tree.append_column(column)
 
-        # Preview summary labels
-        self.prvw_summary_label = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
+        # Status labels
+        self.status_operation = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
+                                         visible=False, no_show_all=True)
+        self.status_progress = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
                                             visible=False, no_show_all=True)
-        self.prvw_info_label = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
-                                         visible=False, no_show_all=True,
-                                         label=_('The export paths above can '
-                                                 'be edited before starting '
-                                                 'the synchronization.'))
+        self.status_duplicates = self._label_with_icon(
+            _("Duplicate export paths detected! The export paths above can be "
+              "edited before starting the synchronization."),
+            Icons.DIALOG_WARNING, visible=False)
+        self.status_deletions = self._label_with_icon(
+            _("Existing files in the destination path will be deleted!"),
+            Icons.DIALOG_WARNING, visible=False)
 
         # Section for previewing exported files
         preview_vbox = Gtk.VBox(spacing=self.spacing_large)
         preview_vbox.pack_start(preview_start_button, False, False, 0)
         preview_vbox.pack_start(preview_stop_button, False, False, 0)
         preview_vbox.pack_start(details_scroll, True, True, 0)
-        preview_vbox.pack_start(self.prvw_summary_label, False, False, 0)
-        preview_vbox.pack_start(self.prvw_info_label, False, False, 0)
+        preview_vbox.pack_start(self.status_operation, False, False, 0)
+        preview_vbox.pack_start(self.status_progress, False, False, 0)
+        preview_vbox.pack_start(self.status_duplicates, False, False, 0)
+        preview_vbox.pack_start(self.status_deletions, False, False, 0)
         main_vbox.pack_start(preview_vbox, True, True, 0)
 
         # Start sync button
@@ -308,7 +314,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                                   max_content_height=max_h,
                                   propagate_natural_height=expand)
 
-    def _label_with_icon(self, text, icon_name):
+    def _label_with_icon(self, text, icon_name, visible=True):
         """
         Create a new label with an icon to the left of the text.
 
@@ -320,6 +326,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         label = Gtk.Label(label=text, xalign=0.0, yalign=0.5, wrap=True)
 
         hbox = Gtk.HBox(spacing=self.spacing_large)
+        if not visible:
+            hbox.set_visible(False)
+            hbox.set_no_show_all(True)
         hbox.pack_start(image, False, False, 0)
         hbox.pack_start(label, True, True, 0)
 
@@ -432,6 +441,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param entered_path:    The new path entered by the user.
         """
 
+        def _update_warnings():
+            if self.c_song_dupes == 0:
+                self.status_duplicates.set_visible(False)
+            if self.c_songs_delete == 0:
+                self.status_deletions.set_visible(False)
+
         def _make_duplicate(entry, old_unique):
             """ Mark the given entry as a duplicate. """
             print_d(entry.filename)
@@ -439,6 +454,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             self.c_song_dupes += 1
             if old_unique:
                 self.c_songs_copy -= 1
+            self.status_duplicates.set_visible(True)
 
         def _make_unique(entry, old_duplicate):
             """ Mark the given entry as a unique file. """
@@ -447,6 +463,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             self.c_songs_copy += 1
             if old_duplicate:
                 self.c_song_dupes -= 1
+            _update_warnings()
 
         def _make_skip(entry, counter):
             """ Skip the given entry during synchronization. """
@@ -514,10 +531,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 pass
             elif old_path['empty'] and new_path['delete']:
                 try:
-                    print_d(_('Make delete: {}').format(entry.filename))
                     Path(entry.filename).relative_to(self.expanded_destination)
                     entry.tag = Entry.Tags.PENDING_DELETE
                     self.c_songs_delete += 1
+                    _update_warnings()
                 except ValueError:
                     pass
             elif old_path['empty'] and new_path['duplicate']:
@@ -532,6 +549,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 pass
             elif old_path['delete'] and new_path['delete']:
                 self.c_songs_delete = _make_skip(entry, self.c_songs_delete)
+                _update_warnings()
             elif old_path['delete'] and new_path['duplicate']:
                 pass
             elif old_path['delete'] and new_path['unique']:
@@ -541,9 +559,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             elif old_path['duplicate'] and new_path['empty']:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
+                _update_warnings()
             elif old_path['duplicate'] and new_path['delete']:
                 self.c_song_dupes = _make_skip(entry, self.c_song_dupes)
                 self.model.foreach(_update_other_song)
+                _update_warnings()
             elif old_path['duplicate'] and new_path['duplicate']:
                 entry.export_path = entered_path
             elif old_path['duplicate'] and new_path['unique']:
@@ -555,9 +575,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             elif old_path['unique'] and new_path['empty']:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
+                _update_warnings()
             elif old_path['unique'] and new_path['delete']:
                 self.c_songs_copy = _make_skip(entry, self.c_songs_copy)
                 self.model.foreach(_update_other_song)
+                _update_warnings()
             elif old_path['unique'] and new_path['duplicate']:
                 _make_duplicate(entry, True)
                 entry.export_path = entered_path
@@ -615,11 +637,20 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         print_d(_('Starting synchronization preview'))
         self.running = True
 
+        # Summary labels
+        self.status_operation.set_label(
+            _('Synchronization preview in progress.'))
+        self.status_operation.set_visible(True)
+        self.status_progress.set_visible(False)
+        self.status_duplicates.set_visible(False)
+        self.status_deletions.set_visible(False)
+
         # Change button visibility
         self.preview_start_button.set_visible(False)
         self.preview_stop_button.set_visible(True)
 
-        if not self._run_preview():
+        self.c_songs_copy = self.c_song_dupes = self.c_songs_delete = 0
+        if self._run_preview() is None:
             return
 
         self._stop_preview()
@@ -632,12 +663,21 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The stop preview button.
         """
-        print_d(_('Stopping synchronization preview'))
+        if button:
+            print_d(_('Stopping synchronization preview'))
+            self.status_operation.set_label(
+                _('Synchronization preview was stopped.'))
+        else:
+            self.status_operation.set_label(
+                _('Synchronization preview has finished.'))
+        self.status_operation.set_visible(True)
         self.running = False
 
         # Change button visibility
         self.preview_start_button.set_visible(True)
         self.preview_stop_button.set_visible(False)
+
+        self._update_preview_summary()
 
     def _run_preview(self):
         """
@@ -655,13 +695,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if not songs:
             return False
         self.model.clear()
-        self.c_songs_copy = self.c_song_dupes = self.c_songs_delete = 0
         export_paths = []
 
         for song in songs:
             if not self.running:
                 print_d(_('Stopped synchronization preview'))
-                return False
+                return None
             self._run_pending_events()
             if not self.destination_entry.get_text():
                 print_d(_('A different plugin was selected - stop preview'))
@@ -695,15 +734,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                     self.model.append(row=self._make_model_row(entry))
                     self.c_songs_delete += 1
 
-        self._update_preview_summary()
         return True
 
     def _update_preview_summary(self):
         """
         Update the preview summary text field.
         """
-        preview_summary_prefix = _('Synchronization will:  ')
-        preview_summary = []
+        prefix = _('Synchronization will:  ')
+        preview_progress = []
 
         if self.c_songs_copy > 0:
             counter = self.c_songs_copy
@@ -716,19 +754,25 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             preview_progress.append(
                 _('skip {} duplicate {}')
                 .format(counter, ngt('file', 'files', counter)))
+            for child in self.status_duplicates.get_children():
+                child.set_visible(True)
+            self.status_duplicates.set_visible(True)
 
         if self.c_songs_delete > 0:
             counter = self.c_songs_delete
             preview_progress.append(
                 _('delete {} {}')
                 .format(counter, ngt('file', 'files', counter)))
+            for child in self.status_deletions.get_children():
+                child.set_visible(True)
+            self.status_deletions.set_visible(True)
 
-        preview_summary_text = ',  '.join(preview_summary)
-        preview_summary_text = preview_summary_prefix + preview_summary_text
-        self.prvw_summary_label.set_label(preview_summary_text)
-        self.prvw_summary_label.set_visible(True)
-        self.prvw_info_label.set_visible(True)
-        print_d(preview_summary_text)
+        preview_progress_text = ',  '.join(preview_progress)
+        if preview_progress_text:
+            preview_progress_text = prefix + preview_progress_text
+            self.status_progress.set_label(preview_progress_text)
+            self.status_progress.set_visible(True)
+            print_d(preview_progress_text)
 
     def _get_paths(self):
         """
@@ -889,6 +933,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         print_d(_('Starting song synchronization'))
         self.running = True
 
+        # Summary labels
+        self.status_operation.set_label(_('Synchronization in progress.'))
+        self.status_duplicates.set_visible(False)
+        self.status_deletions.set_visible(False)
+
         # Change button visibility
         self.sync_start_button.set_visible(False)
         self.sync_stop_button.set_visible(True)
@@ -905,7 +954,12 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :param button: The stop sync button.
         """
-        print_d(_('Stopping song synchronization'))
+        if button:
+            print_d(_('Stopping song synchronization'))
+            self.status_operation.set_label(_('Synchronization was stopped.'))
+        else:
+            self.status_operation.set_label(_('Synchronization has finished.'))
+
         self.running = False
 
         # Change button visibility
@@ -919,7 +973,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         :return: Whether the synchronization was successful.
         """
-        self.c_files_copy = self.c_files_skip = self.c_files_skip_other \
+        self.c_files_copy = self.c_files_skip = self.c_files_skip_previous \
             = self.c_files_dupes = self.c_files_delete = self.c_files_failed = 0
         self.model.foreach(self._sync_entry)
         if not self.running:
@@ -995,7 +1049,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 self.c_files_delete += 1
 
         else:
-            self.c_files_skip_other += 1
+            self.c_files_skip_previous += 1
 
         self._update_sync_summary()
         return False
@@ -1071,13 +1125,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
                 _('failed to sync {} {}')
                 .format(counter, ngt('file', 'files', counter)))
 
-        if self.c_files_skip_other > 0:
-            counter = self.c_files_skip_other
+        if self.c_files_skip_previous > 0:
+            counter = self.c_files_skip_previous
             sync_summary.append(
                 _('skipped {} {} synchronized previously')
                 .format(counter, ngt('file', 'files', counter)))
 
         sync_summary_text = ',  '.join(sync_summary)
         sync_summary_text = sync_summary_prefix + sync_summary_text
-        self.prvw_summary_label.set_label(sync_summary_text)
+        self.status_progress.set_label(sync_summary_text)
         print_d(sync_summary_text)
