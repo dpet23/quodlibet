@@ -272,10 +272,12 @@ class TSyncToDevice(PluginTestCase):
 
         self.assertTrue(self.plugin.preview_start_button.get_visible())
         self.assertFalse(self.plugin.preview_stop_button.get_visible())
-        self.assertFalse(self.plugin.prvw_summary_label.get_visible())
-        self.assertEqual(self.plugin.prvw_summary_label.get_text(), '')
-        self.assertFalse(self.plugin.prvw_info_label.get_visible())
-        self.assertNotEqual(self.plugin.prvw_info_label.get_text(), '')
+        self.assertFalse(self.plugin.status_operation.get_visible())
+        self.assertEqual(self.plugin.status_operation.get_text(), '')
+        self.assertFalse(self.plugin.status_progress.get_visible())
+        self.assertEqual(self.plugin.status_progress.get_text(), '')
+        self.assertFalse(self.plugin.status_duplicates.get_visible())
+        self.assertFalse(self.plugin.status_deletions.get_visible())
 
         self.assertTrue(self.plugin.sync_start_button.get_visible())
         self.assertFalse(self.plugin.sync_stop_button.get_visible())
@@ -374,8 +376,8 @@ class TSyncToDevice(PluginTestCase):
         self.plugin._start_preview(self.plugin.preview_start_button)
         mock_message.assert_not_called()
 
-        self.assertTrue(self.plugin.prvw_summary_label.get_visible())
-        self.assertNotEqual(self.plugin.prvw_summary_label.get_text(), '')
+        self.assertTrue(self.plugin.status_progress.get_visible())
+        self.assertNotEqual(self.plugin.status_progress.get_text(), '')
         n_children = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children, QUERIES[query_name]['results'])
         query_terms = QUERIES[query_name]['terms']
@@ -392,8 +394,8 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_preview(self.plugin.preview_start_button)
 
-        self.assertTrue(self.plugin.prvw_summary_label.get_visible())
-        self.assertNotEqual(self.plugin.prvw_summary_label.get_text(), '')
+        self.assertTrue(self.plugin.status_progress.get_visible())
+        self.assertNotEqual(self.plugin.status_progress.get_text(), '')
         n_children = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children, QUERIES[query_name]['results'])
         query_terms = QUERIES[query_name]['terms']
@@ -410,8 +412,8 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_preview(self.plugin.preview_start_button)
 
-        self.assertTrue(self.plugin.prvw_summary_label.get_visible())
-        self.assertNotEqual(self.plugin.prvw_summary_label.get_text(), '')
+        self.assertTrue(self.plugin.status_progress.get_visible())
+        self.assertNotEqual(self.plugin.status_progress.get_text(), '')
         n_children = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children, QUERIES[query_name]['results'])
         query_terms = QUERIES[query_name]['terms']
@@ -431,10 +433,13 @@ class TSyncToDevice(PluginTestCase):
 
         self.plugin._start_preview(self.plugin.preview_start_button)
 
-        self.assertTrue(self.plugin.prvw_summary_label.get_visible())
-        self.assertNotEqual(self.plugin.prvw_summary_label.get_text(), '')
+        self.assertTrue(self.plugin.status_progress.get_visible())
+        self.assertNotEqual(self.plugin.status_progress.get_text(), '')
         n_children = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children, n_expected)
+
+        self.assertFalse(self.plugin.status_duplicates.get_visible())
+        self.assertFalse(self.plugin.status_deletions.get_visible())
 
     def test_start_preview_export_path_check(self):
         def _verify_path(model, path, iter_, *data):
@@ -490,6 +495,9 @@ class TSyncToDevice(PluginTestCase):
 
         n_children = self.plugin.model.iter_n_children(None)
         self.assertEqual(n_children, num_files)
+
+        self.assertFalse(self.plugin.status_duplicates.get_visible())
+        self.assertTrue(self.plugin.status_deletions.get_visible())
 
     def test_start_preview_query_and_file_deletion(self):
         self._make_library()
@@ -628,12 +636,14 @@ class TSyncToDevice(PluginTestCase):
         cell_id_edit = 0
         cell_id_copy = 1
         self._mark_song_duplicate(cell_id_edit, cell_id_copy)
+        self.assertTrue(self.plugin.status_duplicates.get_visible())
 
         old_c_songs_copy = self.plugin.c_songs_copy
         old_c_song_dupes = self.plugin.c_song_dupes
         self._mark_song_unique(cell_id_edit)
         self.assertEqual(self.plugin.c_songs_copy, old_c_songs_copy + 1)
         self.assertEqual(self.plugin.c_song_dupes, old_c_song_dupes - 1)
+        self.assertFalse(self.plugin.status_duplicates.get_visible())
 
     def test_row_edited_duplicate_to_duplicate(self):
         self._make_library()
@@ -648,6 +658,9 @@ class TSyncToDevice(PluginTestCase):
         old_c_song_dupes = self.plugin.c_song_dupes
         self._mark_song_duplicate(cell_id_edit, cell_id_copy_2)
         self.assertEqual(self.plugin.c_song_dupes, old_c_song_dupes)
+
+        self.assertTrue(self.plugin.status_duplicates.get_visible())
+        self.assertFalse(self.plugin.status_deletions.get_visible())
 
     def test_row_edited_duplicate_to_delete(self):
         self._make_library()
@@ -846,8 +859,10 @@ class TSyncToDevice(PluginTestCase):
         cell_id_copy = 0
         for cell_id in range(cell_id_copy + 1, n_songs):
             self._mark_song_duplicate(cell_id, cell_id_copy)
+        self.assertTrue(self.plugin.status_duplicates.get_visible())
 
         self.plugin._start_sync(self.plugin.sync_start_button)
+        self.assertFalse(self.plugin.status_duplicates.get_visible())
 
         expected_sync = 1
         expected_skip = n_songs - expected_sync
@@ -871,8 +886,10 @@ class TSyncToDevice(PluginTestCase):
         self.dest_entry.set_text(self.path_dest)
         self.plugin._start_preview(self.plugin.preview_start_button)
         n_songs = QUERIES[query_name]['results']
+        self.assertTrue(self.plugin.status_deletions.get_visible())
 
         self.plugin._start_sync(self.plugin.sync_start_button)
+        self.assertFalse(self.plugin.status_deletions.get_visible())
 
         self.assertEqual(self.plugin.c_files_copy, n_songs)
         self.assertEqual(self.plugin.c_files_delete, n_files)
@@ -1002,7 +1019,7 @@ class TSyncToDevice(PluginTestCase):
         mock_rm.reset_mock()
 
         self.plugin._start_sync(self.plugin.sync_start_button)
-        self.assertEqual(self.plugin.c_files_skip_other, n_songs)
+        self.assertEqual(self.plugin.c_files_skip_previous, n_songs)
         self.assertEqual(mock_mkdir.call_count, 0)
         self.assertEqual(mock_cp.call_count, 0)
         self.assertEqual(mock_rm.call_count, 0)
