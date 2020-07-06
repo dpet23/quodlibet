@@ -34,6 +34,7 @@ from quodlibet.qltk.views import HintedTreeView
 from quodlibet.query import Query
 from quodlibet.util import print_d, print_e, print_exc
 from quodlibet.util.enum import enum
+from quodlibet.util.path import strip_win32_incompat_from_path
 from quodlibet.util.string.titlecase import human_title
 
 PLUGIN_CONFIG_SECTION = 'synchronize_to_device'
@@ -103,7 +104,6 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
     default_export_pattern = os.path.join(
         _('<artist>'), _('<album>'), _('<title>'))
-    unsafe_filename_chars = re.compile(r'[<>:"/\\|?*\u00FF-\uFFFF]')
 
     model_cols = {'entry': (0, object),
                   'tag': (1, str),
@@ -918,13 +918,10 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         safe_filename = u''.join(
             [c for c in safe_filename if not unicodedata.combining(c)])
 
-        # Replace unsafe chars in each path component
-        safe_parts = []
-        for component in Path(safe_filename).parts:
-            component = self.unsafe_filename_chars.sub('_', component)
-            component = re.sub('_{2,}', '_', component)
-            safe_parts.append(component)
-        safe_filename = os.path.join(*safe_parts)
+        if os.name != "nt":
+            # Ensure that Win32-incompatible chars are always removed.
+            # On Windows, this is called during `FileFromPattern`.
+            safe_filename = strip_win32_incompat_from_path(safe_filename)
 
         return safe_filename
 
