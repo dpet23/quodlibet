@@ -36,7 +36,7 @@ from quodlibet.util.enum import enum
 from quodlibet.util.path import strip_win32_incompat_from_path
 from quodlibet.util.string.titlecase import human_title
 
-PLUGIN_CONFIG_SECTION = _('synchronize_to_device')
+PLUGIN_CONFIG_SECTION = 'synchronize_to_device'
 
 
 class Entry:
@@ -79,7 +79,7 @@ class Entry:
         if self._song is None:
             self._filename = name
         else:
-            raise ValueError('Cannot set the filename of a song.')
+            raise ValueError(_('Cannot set the filename of a song.'))
 
 
 class SyncToDevice(EventPlugin, PluginConfigMixin):
@@ -244,15 +244,15 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
         # Status labels
         self.status_operation = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
-                                         visible=False, no_show_all=True)
+                                          visible=False, no_show_all=True)
         self.status_progress = Gtk.Label(xalign=0.0, yalign=0.5, wrap=True,
-                                            visible=False, no_show_all=True)
+                                         visible=False, no_show_all=True)
         self.status_duplicates = self._label_with_icon(
-            _("Duplicate export paths detected! The export paths above can be "
-              "edited before starting the synchronization."),
+            _('Duplicate export paths detected! The export paths above can be '
+              'edited before starting the synchronization.'),
             Icons.DIALOG_WARNING, visible=False)
         self.status_deletions = self._label_with_icon(
-            _("Existing files in the destination path will be deleted!"),
+            _('Existing files in the destination path will be deleted!'),
             Icons.DIALOG_WARNING, visible=False)
 
         # Section for previewing exported files
@@ -307,7 +307,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         :param min_h: The minimum height of the window, in pixels.
         :param max_h: The maximum height of the window, in pixels. It will grow
                       up to this height before it starts scrolling the content.
-        :param expand:     Whether the window should expand.
+        :param expand: Whether the window should expand.
         :return: A new ScrolledWindow.
         """
         return Gtk.ScrolledWindow(min_content_height=min_h,
@@ -442,10 +442,19 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
 
         def _update_warnings():
+            """
+            Toggle the visibility of the status warning labels based on the song
+            counts.
+            """
             if self.c_song_dupes == 0:
                 self.status_duplicates.set_visible(False)
+            else:
+                self.status_duplicates.set_visible(True)
+
             if self.c_songs_delete == 0:
                 self.status_deletions.set_visible(False)
+            else:
+                self.status_deletions.set_visible(True)
 
         def _make_duplicate(entry, old_unique):
             """ Mark the given entry as a duplicate. """
@@ -454,7 +463,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             self.c_song_dupes += 1
             if old_unique:
                 self.c_songs_copy -= 1
-            self.status_duplicates.set_visible(True)
+            _update_warnings()
 
         def _make_unique(entry, old_duplicate):
             """ Mark the given entry as a unique file. """
