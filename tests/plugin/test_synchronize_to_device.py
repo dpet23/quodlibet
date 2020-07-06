@@ -8,7 +8,6 @@
 import os
 from os import makedirs
 from pathlib import Path
-from textwrap import dedent
 from unittest.mock import ANY, patch
 
 from gi.repository import Gtk
@@ -69,7 +68,8 @@ SONGS = [
 
 class TSyncToDevice(PluginTestCase):
 
-    QUERIES_SAVED = '\n'.join([v['query']+'\n'+k for k,v in QUERIES.items()])
+    QUERIES_SAVED = '\n'.join([details['query'] + '\n' + name
+                               for name, details in QUERIES.items()])
     RENAMEPATTERNS = '\n'.join(PATTERNS)
 
     @classmethod

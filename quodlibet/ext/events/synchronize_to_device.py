@@ -11,10 +11,9 @@ import os
 import re
 import shutil
 import unicodedata
-from math import floor, log10
 from pathlib import Path
 
-from gi.repository import Gtk, GLib, Pango
+from gi.repository import Gtk, Pango
 from senf import fsn2text
 
 from quodlibet import _
@@ -29,12 +28,9 @@ from quodlibet.plugins import PM
 from quodlibet.plugins import PluginConfigMixin
 from quodlibet.plugins.events import EventPlugin
 from quodlibet.qltk import Icons
-from quodlibet.qltk import Window
 from quodlibet.qltk.cbes import ComboBoxEntrySave
 from quodlibet.qltk.ccb import ConfigCheckButton
-from quodlibet.qltk.models import ObjectStore
 from quodlibet.qltk.views import HintedTreeView
-from quodlibet.qltk.views import TreeViewColumn
 from quodlibet.query import Query
 from quodlibet.util import print_d, print_e, print_exc
 from quodlibet.util.enum import enum
@@ -760,13 +756,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if self.c_songs_copy > 0:
             counter = self.c_songs_copy
             preview_progress.append(
-                _('attempt to write {} {}')\
+                _('attempt to write {} {}')
                 .format(counter, ngt('file', 'files', counter)))
 
         if self.c_song_dupes > 0:
             counter = self.c_song_dupes
             preview_progress.append(
-                _('skip {} duplicate {}')\
+                _('skip {} duplicate {}')
                 .format(counter, ngt('file', 'files', counter)))
             for child in self.status_duplicates.get_children():
                 child.set_visible(True)
@@ -775,7 +771,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if self.c_songs_delete > 0:
             counter = self.c_songs_delete
             preview_progress.append(
-                _('delete {} {}')\
+                _('delete {} {}')
                 .format(counter, ngt('file', 'files', counter)))
             for child in self.status_deletions.get_children():
                 child.set_visible(True)
@@ -1110,14 +1106,14 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
             counter = self.c_files_copy
             text.append(
-                _('written {}/{} {}')\
+                _('written {}/{} {}')
                 .format(counter, self.c_songs_copy,
                         ngt('file', 'files', counter)))
 
             if self.c_files_skip > 0:
                 counter = self.c_files_skip
                 text.append(
-                    _('(skipped {} existing {})')\
+                    _('(skipped {} existing {})')
                     .format(counter, ngt('file', 'files', counter)))
 
             sync_summary.append('  '.join(text))
@@ -1125,27 +1121,27 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if self.c_files_dupes > 0:
             counter = self.c_files_dupes
             sync_summary.append(
-                _('skipped {}/{} duplicate {}')\
+                _('skipped {}/{} duplicate {}')
                 .format(counter, self.c_song_dupes,
                         ngt('file', 'files', counter)))
 
         if self.c_files_delete > 0:
             counter = self.c_files_delete
             sync_summary.append(
-                _('deleted {}/{} {}')\
+                _('deleted {}/{} {}')
                 .format(counter, self.c_songs_delete,
                         ngt('file', 'files', counter)))
 
         if self.c_files_failed > 0:
             counter = self.c_files_failed
             sync_summary.append(
-                _('failed to sync {} {}')\
+                _('failed to sync {} {}')
                 .format(counter, ngt('file', 'files', counter)))
 
         if self.c_files_skip_previous > 0:
             counter = self.c_files_skip_previous
             sync_summary.append(
-                _('skipped {} {} synchronized previously')\
+                _('skipped {} {} synchronized previously')
                 .format(counter, ngt('file', 'files', counter)))
 
         sync_summary_text = ',  '.join(sync_summary)
