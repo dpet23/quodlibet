@@ -8,7 +8,6 @@
 # (at your option) any later version.
 
 import os
-import re
 import shutil
 import unicodedata
 from pathlib import Path
