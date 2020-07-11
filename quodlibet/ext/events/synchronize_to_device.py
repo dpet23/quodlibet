@@ -100,6 +100,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
     spacing_main = 20
     spacing_large = 6
     spacing_small = 3
+    summary_sep = ' ' * 2
+    summary_sep_list = ',' + summary_sep
 
     default_export_pattern = os.path.join(
         _('<artist>'), _('<album>'), _('<title>'))
@@ -166,7 +168,9 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             Icons.DIALOG_WARNING)
         destination_info_label = self._label_with_icon(
             _('For devices mounted with MTP, export to a local destination '
-              'folder, then transfer it to your device with rsync.'),
+              'folder, then transfer it to your device with rsync. '
+              'Or, when syncing many files to an Android Device, use adb-sync, '
+              'which is much faster.'),
             Icons.DIALOG_INFORMATION)
 
         # Destination path frame
@@ -532,8 +536,11 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             for key, value in new_path.items():
                 new_path_inv.setdefault(value, []).append(key)
 
-            print_d(_('\tFilename: {}\n\t\t{} -> {}'.format(entry.filename,
-                ' '.join(old_path_inv[True]), ' '.join(new_path_inv[True]))))
+            print_d(_('Export path changed from [{old_path}] to [{new_path}] '
+                      'for file [{filename}]').format(
+                          filename=entry.filename,
+                          old_path=' '.join(old_path_inv[True]),
+                          new_path=' '.join(new_path_inv[True])))
 
             # If the old path was empty...
             if old_path['empty'] and new_path['empty']:
@@ -749,20 +756,20 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         Update the preview summary text field.
         """
-        prefix = _('Synchronization will:  ')
+        prefix = _('Synchronization will:') + self.summary_sep
         preview_progress = []
 
         if self.c_songs_copy > 0:
             counter = self.c_songs_copy
             preview_progress.append(
-                _('attempt to write {} {}')
-                .format(counter, ngt('file', 'files', counter)))
+                _('attempt to write {count} {file_str}')
+                .format(count=counter, file_str=ngt('file', 'files', counter)))
 
         if self.c_song_dupes > 0:
             counter = self.c_song_dupes
             preview_progress.append(
-                _('skip {} duplicate {}')
-                .format(counter, ngt('file', 'files', counter)))
+                _('skip {count} duplicate {file_str}')
+                .format(count=counter, file_str=ngt('file', 'files', counter)))
             for child in self.status_duplicates.get_children():
                 child.set_visible(True)
             self.status_duplicates.set_visible(True)
@@ -770,13 +777,13 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         if self.c_songs_delete > 0:
             counter = self.c_songs_delete
             preview_progress.append(
-                _('delete {} {}')
-                .format(counter, ngt('file', 'files', counter)))
+                _('delete {count} {file_str}')
+                .format(count=counter, file_str=ngt('file', 'files', counter)))
             for child in self.status_deletions.get_children():
                 child.set_visible(True)
             self.status_deletions.set_visible(True)
 
-        preview_progress_text = ',  '.join(preview_progress)
+        preview_progress_text = self.summary_sep_list.join(preview_progress)
         if preview_progress_text:
             preview_progress_text = prefix + preview_progress_text
             self.status_progress.set_label(preview_progress_text)
@@ -1007,7 +1014,8 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
             print_d(_('A different plugin was selected - stop synchronization'))
             return True
 
-        print_d(_('{} - "{}"').format(entry.tag, entry.filename))
+        print_d(_('{tag} - "{filename}"').format(tag=entry.tag,
+                                                 filename=entry.filename))
 
         if not entry.export_path and not entry.tag:
             return False
@@ -1094,7 +1102,7 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
         """
         Update the synchronization summary text field.
         """
-        sync_summary_prefix = _('Synchronization has:  ')
+        sync_summary_prefix = _('Synchronization has:') + self.summary_sep
         sync_summary = []
 
         if self.c_files_copy > 0 or self.c_files_skip > 0:
@@ -1102,45 +1110,45 @@ class SyncToDevice(EventPlugin, PluginConfigMixin):
 
             counter = self.c_files_copy
             text.append(
-                _('written {}/{} {}')
-                .format(counter, self.c_songs_copy,
-                        ngt('file', 'files', counter)))
+                _('written {count}/{total} {file_str}')
+                .format(count=counter, total=self.c_songs_copy,
+                        file_str=ngt('file', 'files', counter)))
 
             if self.c_files_skip > 0:
                 counter = self.c_files_skip
                 text.append(
-                    _('(skipped {} existing {})')
-                    .format(counter, ngt('file', 'files', counter)))
+                    _('(skipped {count} existing {file_str})').format(
+                        count=counter, file_str=ngt('file', 'files', counter)))
 
-            sync_summary.append('  '.join(text))
+            sync_summary.append(self.summary_sep.join(text))
 
         if self.c_files_dupes > 0:
             counter = self.c_files_dupes
             sync_summary.append(
-                _('skipped {}/{} duplicate {}')
-                .format(counter, self.c_song_dupes,
-                        ngt('file', 'files', counter)))
+                _('skipped {count}/{total} duplicate {file_str}')
+                .format(count=counter, total=self.c_song_dupes,
+                        file_str=ngt('file', 'files', counter)))
 
         if self.c_files_delete > 0:
             counter = self.c_files_delete
             sync_summary.append(
-                _('deleted {}/{} {}')
-                .format(counter, self.c_songs_delete,
-                        ngt('file', 'files', counter)))
+                _('deleted {count}/{total} {file_str}')
+                .format(count=counter, total=self.c_songs_delete,
+                        file_str=ngt('file', 'files', counter)))
 
         if self.c_files_failed > 0:
             counter = self.c_files_failed
             sync_summary.append(
-                _('failed to sync {} {}')
-                .format(counter, ngt('file', 'files', counter)))
+                _('failed to sync {count} {file_str}')
+                .format(count=counter, file_str=ngt('file', 'files', counter)))
 
         if self.c_files_skip_previous > 0:
             counter = self.c_files_skip_previous
             sync_summary.append(
-                _('skipped {} {} synchronized previously')
-                .format(counter, ngt('file', 'files', counter)))
+                _('skipped {count} {file_str} synchronized previously')
+                .format(count=counter, file_str=ngt('file', 'files', counter)))
 
-        sync_summary_text = ',  '.join(sync_summary)
+        sync_summary_text = self.summary_sep_list.join(sync_summary)
         sync_summary_text = sync_summary_prefix + sync_summary_text
         self.status_progress.set_label(sync_summary_text)
         print_d(sync_summary_text)
