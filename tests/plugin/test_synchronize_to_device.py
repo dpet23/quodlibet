@@ -961,6 +961,9 @@ class TSyncToDevice(PluginTestCase):
     @patch('shutil.copyfile')
     @patch('os.makedirs')
     def test_start_sync_complex_success(self, mkdir, cp, rm, rmdir):
+        case_insensitive_filesystem = \
+            os.path.exists(__file__) == os.path.exists(__file__.upper())
+
         self._make_library()
         n_files = self._make_files_for_deletion('song1.mp3', 'file1.mp3',
             str(Path('other', 'file1.txt')), str(Path('other', 'file2.txt')))
@@ -974,7 +977,7 @@ class TSyncToDevice(PluginTestCase):
         for query in queries:
             n_songs += QUERIES[query]['results']
         n_songs_duplicate = 1
-        n_songs_existing = 1
+        n_songs_existing = 1 if case_insensitive_filesystem else 0
         n_total = n_songs + n_files
 
         n_children = self.plugin.model.iter_n_children(None)
